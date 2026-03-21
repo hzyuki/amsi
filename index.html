@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMSI — Sistema de Contabilidade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============================================================
+     LOADING SCREEN
+     ============================================================ -->
+<div id="loading-screen">
+  <div class="loading-logo">
+    <div class="loading-logo-mark">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>
+      </svg>
+    </div>
+    <span class="loading-name">AMSI</span>
+  </div>
+  <div class="loading-spinner"></div>
+</div>
+
+<!-- ============================================================
+     LOGIN SCREEN
+     ============================================================ -->
+<div id="login-screen" class="hidden">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-logo-mark">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>
+        </svg>
+      </div>
+      <div class="login-title">AMSI Contabilidade</div>
+      <div class="login-sub">Entre com suas credenciais para acessar o sistema</div>
+    </div>
+
+    <div class="login-form">
+      <div id="login-error" class="login-error"></div>
+
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input type="email" class="form-control" id="login-email" placeholder="seu@email.com.br" autocomplete="email">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input type="password" class="form-control" id="login-senha" placeholder="••••••••" autocomplete="current-password">
+      </div>
+
+      <button class="btn-login" id="btn-login" onclick="fazerLogin()">
+        <span class="btn-text">Entrar no Sistema</span>
+        <span class="btn-spinner"></span>
+      </button>
+    </div>
+
+    <div class="login-footer">
+      AMSI — Sistema de Contabilidade &copy; 2025
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP (visível após login)
+     ============================================================ -->
+<div class="app" id="app" style="display:none">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+
+    <div class="sidebar-logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>
+        </svg>
+      </div>
+      <div class="logo-wordmark">
+        <span class="logo-name">AMSI</span>
+        <span class="logo-sub">Contabilidade</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+
+      <div class="nav-group">
+        <div class="nav-group-label">Principal</div>
+        <div class="nav-item active" data-page="dashboard">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </span>
+          <span class="nav-label">Dashboard</span>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Movimentações</div>
+        <div class="nav-item" data-page="lancamentos">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </span>
+          <span class="nav-label">Lançamentos</span>
+          <span class="nav-badge" id="badge-lanc">0</span>
+        </div>
+        <div class="nav-item" data-page="contas-pagar">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+          </span>
+          <span class="nav-label">Contas a Pagar</span>
+        </div>
+        <div class="nav-item" data-page="contas-receber">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+          </span>
+          <span class="nav-label">Contas a Receber</span>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Contabilidade</div>
+        <div class="nav-item" data-page="plano-contas">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </span>
+          <span class="nav-label">Plano de Contas</span>
+        </div>
+        <div class="nav-item" data-page="balancete">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          </span>
+          <span class="nav-label">Balancete</span>
+        </div>
+        <div class="nav-item" data-page="fluxo-caixa">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </span>
+          <span class="nav-label">Fluxo de Caixa</span>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Relatórios</div>
+        <div class="nav-item" data-page="dre">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </span>
+          <span class="nav-label">DRE</span>
+        </div>
+        <div class="nav-item" data-page="balanco">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          </span>
+          <span class="nav-label">Balanço Patrimonial</span>
+        </div>
+        <div class="nav-item" data-page="relatorios">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          </span>
+          <span class="nav-label">Relatórios</span>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Gestão</div>
+        <div class="nav-item" data-page="empresas">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </span>
+          <span class="nav-label">Empresas</span>
+        </div>
+        <div class="nav-item" data-page="configuracoes">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </span>
+          <span class="nav-label">Configurações</span>
+        </div>
+      </div>
+
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-row" onclick="fazerLogout()" title="Clique para sair">
+        <div class="user-avatar" id="user-avatar">--</div>
+        <div class="user-info">
+          <div class="user-name" id="user-nome">Carregando...</div>
+          <div class="user-role" id="user-email">...</div>
+        </div>
+      </div>
+    </div>
+
+  </aside><!-- /sidebar -->
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <button class="topbar-toggle" id="btn-toggle" title="Recolher menu">
+        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="page-heading">
+        <div class="page-title" id="page-title">Dashboard</div>
+        <div class="page-breadcrumb" id="page-breadcrumb">AMSI — Dashboard</div>
+      </div>
+
+      <div class="topbar-right">
+        <div class="period-tabs">
+          <button class="period-tab active">Mês</button>
+          <button class="period-tab">Trim.</button>
+          <button class="period-tab">Ano</button>
+        </div>
+        <div class="search-field">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Buscar lançamentos, contas...">
+        </div>
+        <button class="icon-action" title="Notificações">
+          <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notif-dot"></span>
+        </button>
+        <button class="icon-action" title="Sair" onclick="fazerLogout()" style="color:var(--danger)">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div><!-- /topbar -->
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+
+        <div class="stat-grid">
+          <div class="stat-card c-blue">
+            <div class="stat-header">
+              <span class="stat-label">Receita do Mês</span>
+              <div class="stat-icon c-blue">
+                <svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+              </div>
+            </div>
+            <div class="stat-value">R$&nbsp;148.320</div>
+            <div class="stat-delta up">
+              <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+              12,4% em relação ao mês anterior
+            </div>
+          </div>
+          <div class="stat-card c-red">
+            <div class="stat-header">
+              <span class="stat-label">Despesas do Mês</span>
+              <div class="stat-icon c-red">
+                <svg viewBox="0 0 24 24"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+              </div>
+            </div>
+            <div class="stat-value">R$&nbsp;93.740</div>
+            <div class="stat-delta down">
+              <svg viewBox="0 0 24 24"><polyline points="18 9 12 15 6 9"/></svg>
+              5,1% em relação ao mês anterior
+            </div>
+          </div>
+          <div class="stat-card c-green">
+            <div class="stat-header">
+              <span class="stat-label">Resultado Líquido</span>
+              <div class="stat-icon c-green">
+                <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              </div>
+            </div>
+            <div class="stat-value">R$&nbsp;22.275</div>
+            <div class="stat-delta up">
+              <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+              Lucro líquido após IR/CSLL
+            </div>
+          </div>
+          <div class="stat-card c-amber">
+            <div class="stat-header">
+              <span class="stat-label">A Receber (30 dias)</span>
+              <div class="stat-icon c-amber">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+            </div>
+            <div class="stat-value">R$&nbsp;31.200</div>
+            <div class="stat-delta neu">
+              <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              5 títulos em aberto
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-3-1">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Receitas vs. Despesas — últimos 6 meses</span>
+              <div style="display:flex;align-items:center;gap:14px">
+                <div style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-tertiary)">
+                  <span style="width:10px;height:10px;border-radius:2px;background:var(--accent);display:inline-block"></span>Receitas
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-tertiary)">
+                  <span style="width:10px;height:10px;border-radius:2px;background:var(--danger);opacity:.7;display:inline-block"></span>Despesas
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="bar-chart-wrap" id="bar-chart"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Despesas por Natureza</span>
+            </div>
+            <div class="card-body">
+              <div class="donut-wrap">
+                <div class="donut-canvas-wrap">
+                  <canvas id="donut-chart" width="130" height="130"></canvas>
+                  <div class="donut-center">
+                    <div class="donut-center-val">R$93k</div>
+                    <div class="donut-center-lbl">Total</div>
+                  </div>
+                </div>
+                <div class="donut-legend" id="donut-legend"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Últimos Lançamentos</span>
+              <button class="btn btn-secondary btn-sm" onclick="navigate('lancamentos')">Ver todos</button>
+            </div>
+            <div class="activity-list" id="dash-activity"></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Próximos Vencimentos</span>
+              <button class="btn btn-secondary btn-sm" onclick="navigate('contas-pagar')">Ver todos</button>
+            </div>
+            <div class="activity-list" id="dash-vencimentos"></div>
+          </div>
+        </div>
+
+      </div><!-- /dashboard -->
+
+      <!-- LANÇAMENTOS -->
+      <div class="page" id="page-lancamentos">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+          <div class="kpi-row" style="margin:0">
+            <div class="kpi">
+              <div class="kpi-label">Total Débitos</div>
+              <div class="kpi-value" id="kpi-debitos" style="color:var(--danger)">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Total Créditos</div>
+              <div class="kpi-value" id="kpi-creditos" style="color:var(--success)">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Saldo do Período</div>
+              <div class="kpi-value" id="kpi-saldo">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Qtd. Lançamentos</div>
+              <div class="kpi-value" id="kpi-count">—</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-lancamento')">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Lançamento
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Lançamentos Contábeis</span>
+            <div style="display:flex;gap:8px">
+              <select class="form-control" id="filter-tipo" style="width:auto;padding:6px 28px 6px 10px;font-size:12px">
+                <option value="">Todos os tipos</option>
+                <option value="Débito">Débito</option>
+                <option value="Crédito">Crédito</option>
+              </select>
+              <input type="month" class="form-control" value="2025-03" style="width:auto;padding:6px 10px;font-size:12px">
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Histórico</th>
+                  <th>Conta Débito</th>
+                  <th>Conta Crédito</th>
+                  <th class="text-right">Valor (R$)</th>
+                  <th>Tipo</th>
+                  <th>Documento</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tb-lancamentos"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /lancamentos -->
+
+      <!-- CONTAS A PAGAR -->
+      <div class="page" id="page-contas-pagar">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+          <div class="kpi-row" style="margin:0">
+            <div class="kpi"><div class="kpi-label">Em Aberto</div><div class="kpi-value" id="kpi-cp-aberto" style="color:var(--accent)">—</div></div>
+            <div class="kpi"><div class="kpi-label">Vencidas</div><div class="kpi-value" id="kpi-cp-vencida" style="color:var(--warning)">—</div></div>
+            <div class="kpi"><div class="kpi-label">Pagas no Mês</div><div class="kpi-value" id="kpi-cp-paga" style="color:var(--success)">—</div></div>
+            <div class="kpi"><div class="kpi-label">Total Geral</div><div class="kpi-value" id="kpi-cp-total">—</div></div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-conta-pagar')">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nova Conta
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Contas a Pagar</span>
+            <div class="tabs-bar">
+              <button class="tab-btn active">Em Aberto</button>
+              <button class="tab-btn">Pagas</button>
+              <button class="tab-btn">Vencidas</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fornecedor</th>
+                  <th>Descrição</th>
+                  <th>Emissão</th>
+                  <th>Vencimento</th>
+                  <th class="text-right">Valor</th>
+                  <th>Forma</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tb-contas-pagar"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /contas-pagar -->
+
+      <!-- CONTAS A RECEBER -->
+      <div class="page" id="page-contas-receber">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+          <div class="kpi-row" style="margin:0">
+            <div class="kpi"><div class="kpi-label">Em Aberto</div><div class="kpi-value" id="kpi-cr-aberto" style="color:var(--accent)">—</div></div>
+            <div class="kpi"><div class="kpi-label">Vencidas</div><div class="kpi-value" id="kpi-cr-vencida" style="color:var(--warning)">—</div></div>
+            <div class="kpi"><div class="kpi-label">Recebidas no Mês</div><div class="kpi-value" id="kpi-cr-recebida" style="color:var(--success)">—</div></div>
+            <div class="kpi"><div class="kpi-label">Total Geral</div><div class="kpi-value" id="kpi-cr-total">—</div></div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-conta-receber')">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nova Conta
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Contas a Receber</span>
+            <div class="tabs-bar">
+              <button class="tab-btn active">Em Aberto</button>
+              <button class="tab-btn">Recebidas</button>
+              <button class="tab-btn">Vencidas</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Descrição</th>
+                  <th>Emissão</th>
+                  <th>Vencimento</th>
+                  <th class="text-right">Valor</th>
+                  <th>Forma</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tb-contas-receber"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /contas-receber -->
+
+      <!-- PLANO DE CONTAS -->
+      <div class="page" id="page-plano-contas">
+
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <p style="font-size:12.5px;color:var(--text-tertiary)">Estrutura baseada no Plano de Contas Referencial — NBC TG / CFC</p>
+          <button class="btn btn-primary" onclick="toast('Funcionalidade em desenvolvimento.','info')">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nova Conta
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Plano de Contas</span>
+            <div class="search-field">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="busca-conta" placeholder="Buscar por código ou nome...">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:80px 1fr 100px 90px 130px;background:var(--bg-base);border-bottom:1px solid var(--border-subtle)">
+            <div style="padding:8px 16px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-tertiary)">Código</div>
+            <div style="padding:8px 0;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-tertiary)">Nome</div>
+            <div style="padding:8px 0;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-tertiary)">Natureza</div>
+            <div style="padding:8px 0;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-tertiary)">Tipo</div>
+            <div style="padding:8px 0;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-tertiary);text-align:right;padding-right:20px">Saldo</div>
+          </div>
+          <div id="account-tree"></div>
+        </div>
+
+      </div><!-- /plano-contas -->
+
+      <!-- BALANCETE -->
+      <div class="page" id="page-balancete">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Balancete de Verificação</span>
+            <div style="display:flex;gap:8px">
+              <input type="month" value="2025-03" class="form-control" style="width:auto;padding:6px 10px;font-size:12px">
+              <button class="btn btn-secondary btn-sm" onclick="toast('Exportando PDF...','info')">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Exportar
+              </button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Conta</th>
+                  <th class="text-right">Saldo Ant. D</th>
+                  <th class="text-right">Saldo Ant. C</th>
+                  <th class="text-right">Movto. D</th>
+                  <th class="text-right">Movto. C</th>
+                  <th class="text-right">Saldo Atual D</th>
+                  <th class="text-right">Saldo Atual C</th>
+                </tr>
+              </thead>
+              <tbody id="tb-balancete"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- FLUXO DE CAIXA -->
+      <div class="page" id="page-fluxo-caixa">
+        <div class="stat-grid">
+          <div class="stat-card c-blue">
+            <div class="stat-header"><span class="stat-label">Saldo Inicial</span><div class="stat-icon c-blue"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div></div>
+            <div class="stat-value">R$&nbsp;82.400</div>
+            <div class="stat-delta neu"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>01/03/2025</div>
+          </div>
+          <div class="stat-card c-green">
+            <div class="stat-header"><span class="stat-label">Total de Entradas</span><div class="stat-icon c-green"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div></div>
+            <div class="stat-value">R$&nbsp;91.100</div>
+            <div class="stat-delta up"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>4 operações de receita</div>
+          </div>
+          <div class="stat-card c-red">
+            <div class="stat-header"><span class="stat-label">Total de Saídas</span><div class="stat-icon c-red"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div></div>
+            <div class="stat-value">R$&nbsp;27.930</div>
+            <div class="stat-delta down"><svg viewBox="0 0 24 24"><polyline points="18 9 12 15 6 9"/></svg>6 operações de saída</div>
+          </div>
+          <div class="stat-card c-amber">
+            <div class="stat-header"><span class="stat-label">Saldo Atual</span><div class="stat-icon c-amber"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></div>
+            <div class="stat-value">R$&nbsp;145.570</div>
+            <div class="stat-delta up"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>76,7% acima do saldo inicial</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Demonstrativo de Fluxo de Caixa</span>
+            <button class="btn btn-secondary btn-sm" onclick="toast('Exportando...','info')">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exportar
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th class="text-right">Entradas</th><th class="text-right">Saídas</th><th class="text-right">Saldo Acum.</th></tr></thead>
+              <tbody id="tb-fluxo"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRE -->
+      <div class="page" id="page-dre">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">DRE — Demonstração do Resultado do Exercício</span>
+            <div style="display:flex;gap:8px">
+              <select class="form-control" style="width:auto;padding:6px 28px 6px 10px;font-size:12px">
+                <option>Março/2025</option><option>Fevereiro/2025</option><option>Janeiro/2025</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="toast('Exportando DRE...','info')">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Exportar
+              </button>
+            </div>
+          </div>
+          <div class="card-body" id="dre-wrap" style="max-width:600px"></div>
+        </div>
+      </div>
+
+      <!-- BALANÇO PATRIMONIAL -->
+      <div class="page" id="page-balanco">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <p style="font-size:12.5px;color:var(--text-tertiary)">Posição patrimonial em 31/03/2025</p>
+          <button class="btn btn-secondary btn-sm" onclick="toast('Exportando Balanço...','info')">
+            <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar PDF
+          </button>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">ATIVO</span>
+              <span class="mono" style="font-size:14px;color:var(--success);font-weight:600">R$ 484.200,00</span>
+            </div>
+            <div class="card-body" id="balanco-ativo"></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">PASSIVO + PATRIMÔNIO LÍQUIDO</span>
+              <span class="mono" style="font-size:14px;color:var(--danger);font-weight:600">R$ 484.200,00</span>
+            </div>
+            <div class="card-body" id="balanco-passivo"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RELATÓRIOS -->
+      <div class="page" id="page-relatorios">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px" id="relatorios-grid"></div>
+      </div>
+
+      <!-- EMPRESAS -->
+      <div class="page" id="page-empresas">
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn btn-primary" onclick="openModal('modal-empresa')">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Cadastrar Empresa
+          </button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px" id="empresas-grid"></div>
+      </div>
+
+      <!-- CONFIGURAÇÕES -->
+      <div class="page" id="page-configuracoes">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Dados da Empresa</span></div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-grid-2">
+                  <div class="form-group form-full"><label class="form-label">Razão Social</label><input class="form-control" value="Empresa Modelo Ltda"></div>
+                  <div class="form-group"><label class="form-label">CNPJ</label><input class="form-control" value="12.345.678/0001-90"></div>
+                  <div class="form-group"><label class="form-label">Inscrição Estadual</label><input class="form-control" value="123/4567890"></div>
+                  <div class="form-group"><label class="form-label">CNAE Principal</label><input class="form-control" value="6201-5/00"></div>
+                  <div class="form-group"><label class="form-label">Regime Tributário</label>
+                    <select class="form-control"><option>Lucro Presumido</option><option>Lucro Real</option><option>Simples Nacional</option><option>MEI</option></select>
+                  </div>
+                  <div class="form-group form-full"><label class="form-label">Endereço</label><input class="form-control" value="Rua XV de Novembro, 1500 — Porto Alegre/RS"></div>
+                  <div class="form-group"><label class="form-label">E-mail Contábil</label><input class="form-control" type="email" value="contabilidade@empresa.com.br"></div>
+                  <div class="form-group"><label class="form-label">Telefone</label><input class="form-control" value="(51) 3000-0000"></div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-top:6px">
+                <button class="btn btn-primary" onclick="toast('Dados salvos com sucesso.','success')">Salvar Alterações</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Preferências do Sistema</span></div>
+            <div class="card-body">
+              <div class="form-grid-2">
+                <div class="form-group"><label class="form-label">Exercício Fiscal</label>
+                  <select class="form-control"><option>Janeiro – Dezembro</option><option>Outro período</option></select>
+                </div>
+                <div class="form-group"><label class="form-label">Moeda Padrão</label>
+                  <select class="form-control"><option>BRL — Real Brasileiro</option><option>USD — Dólar</option></select>
+                </div>
+                <div class="form-group"><label class="form-label">Formato de Data</label>
+                  <select class="form-control"><option>DD/MM/AAAA</option><option>AAAA-MM-DD</option></select>
+                </div>
+                <div class="form-group"><label class="form-label">Casas Decimais</label>
+                  <select class="form-control"><option>2 casas</option><option>4 casas</option></select>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-top:14px">
+                <button class="btn btn-primary" onclick="toast('Preferências salvas.','success')">Salvar Preferências</button>
+              </div>
+              <div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border-subtle)">
+                <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:10px">Sessão atual</div>
+                <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px" id="cfg-user-info">—</div>
+                <button class="btn btn-danger btn-sm" onclick="fazerLogout()">Sair do Sistema</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- MODALS -->
+
+<!-- Modal: Lançamento -->
+<div class="modal-backdrop" id="modal-lancamento">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">Novo Lançamento Contábil</span>
+      <button class="modal-close" onclick="closeModal('modal-lancamento')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid-2 form-row">
+        <div class="form-group"><label class="form-label">Data *</label><input type="date" class="form-control" id="lanc-data"></div>
+        <div class="form-group"><label class="form-label">Tipo *</label>
+          <select class="form-control" id="lanc-tipo"><option>Crédito</option><option>Débito</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Conta Débito *</label><select class="form-control" id="lanc-debito"></select></div>
+        <div class="form-group"><label class="form-label">Conta Crédito *</label><select class="form-control" id="lanc-credito"></select></div>
+      </div>
+      <div class="form-group form-row"><label class="form-label">Histórico *</label><input class="form-control" id="lanc-historico" placeholder="Descrição detalhada do lançamento"></div>
+      <div class="form-grid-2 form-row">
+        <div class="form-group"><label class="form-label">Valor (R$) *</label><input type="number" class="form-control" id="lanc-valor" placeholder="0,00" step="0.01" min="0"></div>
+        <div class="form-group"><label class="form-label">Documento</label><input class="form-control" id="lanc-documento" placeholder="NF-e, REC, DARF..."></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-lancamento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveLancamento()">Salvar Lançamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Conta a Pagar -->
+<div class="modal-backdrop" id="modal-conta-pagar">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">Nova Conta a Pagar</span>
+      <button class="modal-close" onclick="closeModal('modal-conta-pagar')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group form-row"><label class="form-label">Fornecedor *</label><input class="form-control" id="cp-fornecedor" placeholder="Nome do fornecedor ou credor"></div>
+      <div class="form-group form-row"><label class="form-label">Descrição *</label><input class="form-control" id="cp-descricao" placeholder="Descrição da conta"></div>
+      <div class="form-grid-3 form-row">
+        <div class="form-group"><label class="form-label">Emissão</label><input type="date" class="form-control" id="cp-emissao"></div>
+        <div class="form-group"><label class="form-label">Vencimento *</label><input type="date" class="form-control" id="cp-vencimento"></div>
+        <div class="form-group"><label class="form-label">Valor (R$) *</label><input type="number" class="form-control" id="cp-valor" placeholder="0,00" step="0.01"></div>
+      </div>
+      <div class="form-grid-2 form-row">
+        <div class="form-group"><label class="form-label">Categoria</label>
+          <select class="form-control" id="cp-categoria">
+            <option>Fornecedores</option><option>Tributos Federais</option><option>Tributos Estaduais</option>
+            <option>Aluguel</option><option>Telecomunicações</option><option>Serviços Terceirizados</option><option>Outros</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Forma de Pagamento</label>
+          <select class="form-control" id="cp-forma">
+            <option>Boleto Bancário</option><option>Transferência Bancária</option><option>PIX</option>
+            <option>Débito Automático</option><option>DARF</option><option>DARE</option><option>Cheque</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-conta-pagar')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveContaPagar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Conta a Receber -->
+<div class="modal-backdrop" id="modal-conta-receber">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">Nova Conta a Receber</span>
+      <button class="modal-close" onclick="closeModal('modal-conta-receber')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group form-row"><label class="form-label">Cliente *</label><input class="form-control" id="cr-cliente" placeholder="Nome do cliente ou devedor"></div>
+      <div class="form-group form-row"><label class="form-label">Descrição *</label><input class="form-control" id="cr-descricao" placeholder="Descrição do título"></div>
+      <div class="form-grid-3 form-row">
+        <div class="form-group"><label class="form-label">Emissão</label><input type="date" class="form-control" id="cr-emissao"></div>
+        <div class="form-group"><label class="form-label">Vencimento *</label><input type="date" class="form-control" id="cr-vencimento"></div>
+        <div class="form-group"><label class="form-label">Valor (R$) *</label><input type="number" class="form-control" id="cr-valor" placeholder="0,00" step="0.01"></div>
+      </div>
+      <div class="form-grid-2 form-row">
+        <div class="form-group"><label class="form-label">Categoria</label>
+          <select class="form-control" id="cr-categoria">
+            <option>Vendas</option><option>Serviços Prestados</option><option>Aluguéis</option>
+            <option>Juros e Encargos</option><option>Outros</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Forma de Recebimento</label>
+          <select class="form-control" id="cr-forma">
+            <option>Boleto Bancário</option><option>Transferência Bancária</option><option>PIX</option>
+            <option>Ordem Bancária</option><option>Cartão</option><option>Dinheiro</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-conta-receber')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveContaReceber()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Empresa -->
+<div class="modal-backdrop" id="modal-empresa">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">Cadastrar Empresa</span>
+      <button class="modal-close" onclick="closeModal('modal-empresa')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group form-row"><label class="form-label">Razão Social *</label><input class="form-control" id="emp-razao" placeholder="Nome completo da empresa"></div>
+      <div class="form-grid-2 form-row">
+        <div class="form-group"><label class="form-label">CNPJ *</label><input class="form-control" id="emp-cnpj" placeholder="00.000.000/0000-00"></div>
+        <div class="form-group"><label class="form-label">Inscrição Estadual</label><input class="form-control" id="emp-ie" placeholder="IE ou ISENTO"></div>
+      </div>
+      <div class="form-grid-2 form-row">
+        <div class="form-group"><label class="form-label">Regime Tributário</label>
+          <select class="form-control" id="emp-regime">
+            <option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option><option>MEI</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">CNAE Principal</label><input class="form-control" id="emp-cnae" placeholder="0000-0/00"></div>
+      </div>
+      <div class="form-group form-row"><label class="form-label">E-mail</label><input class="form-control" id="emp-email" type="email" placeholder="contato@empresa.com.br"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-empresa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEmpresa()">Cadastrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Stack -->
+<div class="toast-stack" id="toast-stack"></div>
+
+<!-- Firebase SDK (modular via CDN) -->
+<script type="module" src="app.js"></script>
+</body>
+</html>
