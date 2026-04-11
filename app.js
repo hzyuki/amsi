@@ -70,6 +70,62 @@ function hoje() {
 }
 
 // ============================================================
+// SEGURANÇA – Sanitização e validação de entrada
+// ============================================================
+
+/**
+ * Escapa caracteres HTML para prevenir XSS.
+ * SEMPRE use esta função ao inserir dados do usuário/banco via innerHTML.
+ */
+function esc(str) {
+  if (str === null || str === undefined) return '—';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
+
+/**
+ * Valida e sanitiza um valor numérico.
+ * Retorna o número ou null se inválido.
+ */
+function sanitizeNumber(val, min = 0) {
+  const n = parseFloat(String(val).replace(',', '.'));
+  if (isNaN(n) || n < min) return null;
+  return n;
+}
+
+/**
+ * Valida formato de data ISO (YYYY-MM-DD).
+ */
+function isValidDate(val) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(val) && !isNaN(Date.parse(val));
+}
+
+/**
+ * Sanitiza texto de entrada: remove caracteres de controle e limita tamanho.
+ */
+function sanitizeText(val, maxLen = 500) {
+  if (!val) return '';
+  return String(val)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // remove control chars
+    .trim()
+    .substring(0, maxLen);
+}
+
+/**
+ * Sanitiza IDs vindos do Firestore para uso em atributos HTML.
+ * IDs do Firestore são alfanuméricos, então qualquer outro caractere é rejeitado.
+ */
+function sanitizeId(id) {
+  if (!id) return '';
+  return String(id).replace(/[^a-zA-Z0-9_\-]/g, '');
+}
+
+// ============================================================
 // CAMINHO FIRESTORE (baseado no uid do usuário logado)
 // ============================================================
 
@@ -584,9 +640,19 @@ function closeModal(id) { qs(`#${id}`)?.classList.remove('open'); }
 
 function toast(msg, type = 'info') {
   const iconMap = { success: Icon.check, error: Icon.x, info: Icon.bell };
+  const safeTypes = ['success', 'error', 'info'];
+  const safeType = safeTypes.includes(type) ? type : 'info';
   const el = document.createElement('div');
-  el.className = `toast s-${type}`;
-  el.innerHTML = `<span class="toast-icon">${iconMap[type] || iconMap.info}</span><span class="toast-msg">${msg}</span>`;
+  el.className = `toast s-${safeType}`;
+  // Usa textContent para o texto — nunca innerHTML com dados externos
+  const iconSpan = document.createElement('span');
+  iconSpan.className = 'toast-icon';
+  iconSpan.innerHTML = iconMap[safeType]; // SVG estático, seguro
+  const msgSpan = document.createElement('span');
+  msgSpan.className = 'toast-msg';
+  msgSpan.textContent = msg; // textContent é seguro contra XSS
+  el.appendChild(iconSpan);
+  el.appendChild(msgSpan);
   qs('#toast-stack').appendChild(el);
   setTimeout(() => el.remove(), 3800);
 }
@@ -606,8 +672,8 @@ function renderDashboard() {
     <div class="activity-item">
       <div class="activity-dot ${isCredito ? 'credit' : 'debit'}">${isCredito ? Icon.credit : Icon.debit}</div>
       <div class="activity-body">
-        <div class="activity-desc">${l.historico}</div>
-        <div class="activity-meta">${fmtDate(l.data)} · ${l.tipo} · ${l.documento}</div>
+        <div class="activity-desc">${esc(l.historico)}</div>
+        <div class="activity-meta">${esc(fmtDate(l.data))} · ${esc(l.tipo)} · ${esc(l.documento)}</div>
       </div>
       <div class="activity-amount ${isCredito ? 'pos' : 'neg'}">${isCredito ? '+' : '−'}${fmt(l.valor)}</div>
     </div>`;
@@ -620,12 +686,12 @@ function renderDashboard() {
       <div class="activity-item" style="cursor:default">
         <div class="activity-dot info">${Icon.clock}</div>
         <div class="activity-body">
-          <div class="activity-desc" style="font-size:12.5px;font-weight:600">${c.fornecedor || c.cliente || '—'}</div>
-          <div class="activity-meta">${c.descricao || c['descriçao'] || '—'} — vence ${fmtDate(c.vencimento)}</div>
+          <div class="activity-desc" style="font-size:12.5px;font-weight:600">${esc(c.fornecedor || c.cliente || '—')}</div>
+          <div class="activity-meta">${esc(c.descricao || c['descriçao'] || '—')} — vence ${esc(fmtDate(c.vencimento))}</div>
         </div>
         <div style="text-align:right">
           <div class="activity-amount neg">${fmt(c.valor)}</div>
-          <span class="badge ${c.status === 'Vencida' ? 'badge-amber' : 'badge-blue'}" style="margin-top:2px">${c.status}</span>
+          <span class="badge ${c.status === 'Vencida' ? 'badge-amber' : 'badge-blue'}" style="margin-top:2px">${esc(c.status)}</span>
         </div>
       </div>`).join('');
   }
@@ -718,19 +784,22 @@ function renderLancamentos() {
   const tbody = qs('#tb-lancamentos');
   if (!tbody) return;
 
-  tbody.innerHTML = list.map(l => `
+  tbody.innerHTML = list.map(l => {
+    const safeId = sanitizeId(l.id);
+    return `
     <tr>
-      <td>${fmtDate(l.data)}</td>
-      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.historico}</td>
-      <td style="color:var(--text-secondary);font-size:12px">${l.debito}</td>
-      <td style="color:var(--text-secondary);font-size:12px">${l.credito}</td>
+      <td>${esc(fmtDate(l.data))}</td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.historico)}</td>
+      <td style="color:var(--text-secondary);font-size:12px">${esc(l.debito)}</td>
+      <td style="color:var(--text-secondary);font-size:12px">${esc(l.credito)}</td>
       <td class="mono">${fmt(l.valor)}</td>
-      <td><span class="badge ${l.tipo === 'Crédito' ? 'badge-green' : 'badge-red'}">${l.tipo}</span></td>
-      <td style="color:var(--text-tertiary);font-family:var(--font-mono);font-size:12px">${l.documento}</td>
+      <td><span class="badge ${l.tipo === 'Crédito' ? 'badge-green' : 'badge-red'}">${esc(l.tipo)}</span></td>
+      <td style="color:var(--text-tertiary);font-family:var(--font-mono);font-size:12px">${esc(l.documento)}</td>
       <td>
-        <button class="btn btn-danger btn-xs btn-icon" onclick="deleteLancamento('${l.id}')" title="Excluir">${Icon.trash}</button>
+        <button class="btn btn-danger btn-xs btn-icon" data-id="${safeId}" data-action="delete-lanc" title="Excluir">${Icon.trash}</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   const debitos  = list.filter(l => l.tipo === 'Débito').reduce((a, b) => a + b.valor, 0);
   const creditos = list.filter(l => l.tipo === 'Crédito').reduce((a, b) => a + b.valor, 0);
@@ -747,6 +816,16 @@ function renderLancamentos() {
   if (kN) kN.textContent = list.length;
   // FIX: badge de lançamentos dinâmico
   if (badge) badge.textContent = DB.lancamentos.length;
+
+  // Delegação de eventos — evita onclick inline com dados externos
+  if (tbody) {
+    tbody.onclick = e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      if (btn.dataset.action === 'delete-lanc' && id) deleteLancamento(id);
+    };
+  }
 }
 
 async function deleteLancamento(id) {
@@ -760,20 +839,31 @@ async function deleteLancamento(id) {
 
 async function saveLancamento() {
   const data      = qs('#lanc-data')?.value;
-  const historico = qs('#lanc-historico')?.value.trim();
+  const historico = sanitizeText(qs('#lanc-historico')?.value, 300);
   const valorRaw  = qs('#lanc-valor')?.value;
   const tipo      = qs('#lanc-tipo')?.value;
   const debito    = qs('#lanc-debito')?.value;
   const credito   = qs('#lanc-credito')?.value;
-  const documento = qs('#lanc-documento')?.value.trim();
+  const documento = sanitizeText(qs('#lanc-documento')?.value, 50);
 
   if (!data || !historico || !valorRaw || !debito || !credito) {
     toast('Preencha todos os campos obrigatórios.', 'error'); return;
   }
-  const valor = parseFloat(valorRaw);
-  if (isNaN(valor) || valor <= 0) { toast('Valor inválido.', 'error'); return; }
+  if (!isValidDate(data)) { toast('Data inválida.', 'error'); return; }
 
-  const novoLanc = { data, historico, debito, credito, valor, tipo, documento: documento || '—', criadoEm: serverTimestamp(), criadoPor: currentUser.uid };
+  const valor = sanitizeNumber(valorRaw, 0.01);
+  if (valor === null) { toast('Valor inválido.', 'error'); return; }
+
+  // Valida que débito e crédito são contas do plano (não entrada livre)
+  const contasValidas = DB.planoContas.filter(c => c.tipo === 'A').map(c => `${c.cod} — ${c.nome}`);
+  if (!contasValidas.includes(debito) || !contasValidas.includes(credito)) {
+    toast('Conta contábil inválida.', 'error'); return;
+  }
+
+  const tiposValidos = ['Crédito', 'Débito'];
+  const tipoSafe = tiposValidos.includes(tipo) ? tipo : 'Débito';
+
+  const novoLanc = { data, historico, debito, credito, valor, tipo: tipoSafe, documento: documento || '—', criadoEm: serverTimestamp(), criadoPor: currentUser.uid };
 
   try {
     const docSnap = await addDoc(colRef('lancamentos'), novoLanc);
@@ -811,7 +901,7 @@ function renderContasPagar() {
 
   const sBadge = { 'Em Aberto': 'badge-blue', 'Paga': 'badge-green', 'Vencida': 'badge-amber' };
   tbody.innerHTML = DB['contas a pagar'].map(c => {
-    // Compatibilidade: campo pode ser 'fornecedor' (padrão) ou 'cliente' (criado manualmente)
+    const safeId   = sanitizeId(c.id);
     const nomeForn = c.fornecedor || c.cliente || '—';
     const desc     = c.descricao  || c['descriçao'] || c['descricao'] || '—';
     const emissao  = c.emissao    || c.criasoEM     || c.criadoEm    || '';
@@ -819,17 +909,18 @@ function renderContasPagar() {
     const valor    = Number(c.valor) || 0;
     const forma    = c.forma      || '—';
     const status   = c.status     || 'Em Aberto';
+    const statusSafe = ['Em Aberto', 'Paga', 'Vencida'].includes(status) ? status : 'Em Aberto';
     return `<tr>
-    <td style="font-weight:600">${nomeForn}</td>
-    <td style="color:var(--text-secondary);font-size:12.5px">${desc}</td>
-    <td>${fmtDate(typeof emissao === 'string' ? emissao : '')}</td>
-    <td>${fmtDate(venc)}</td>
+    <td style="font-weight:600">${esc(nomeForn)}</td>
+    <td style="color:var(--text-secondary);font-size:12.5px">${esc(desc)}</td>
+    <td>${esc(fmtDate(typeof emissao === 'string' ? emissao : ''))}</td>
+    <td>${esc(fmtDate(venc))}</td>
     <td class="mono">${fmt(valor)}</td>
-    <td style="color:var(--text-secondary);font-size:12px">${forma}</td>
-    <td><span class="badge ${sBadge[status] || 'badge-neutral'}">${status}</span></td>
+    <td style="color:var(--text-secondary);font-size:12px">${esc(forma)}</td>
+    <td><span class="badge ${sBadge[statusSafe] || 'badge-neutral'}">${esc(statusSafe)}</span></td>
     <td style="display:flex;gap:5px">
-      ${status === 'Em Aberto' ? `<button class="btn btn-success btn-xs" onclick="pagarConta('${c.id}')">Pagar</button>` : ''}
-      <button class="btn btn-danger btn-xs btn-icon" onclick="deleteContaPagar('${c.id}')">${Icon.trash}</button>
+      ${statusSafe === 'Em Aberto' ? `<button class="btn btn-success btn-xs" data-id="${safeId}" data-action="pagar-conta">Pagar</button>` : ''}
+      <button class="btn btn-danger btn-xs btn-icon" data-id="${safeId}" data-action="delete-cp">${Icon.trash}</button>
     </td>
   </tr>`;
   }).join('');
@@ -844,6 +935,17 @@ function renderContasPagar() {
   if (s('#kpi-cp-vencida')) s('#kpi-cp-vencida').textContent = fmt(vencida);
   if (s('#kpi-cp-paga'))   s('#kpi-cp-paga').textContent   = fmt(paga);
   if (s('#kpi-cp-total'))  s('#kpi-cp-total').textContent  = fmt(total);
+
+  if (tbody) {
+    tbody.onclick = e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      if (!id) return;
+      if (btn.dataset.action === 'pagar-conta')  pagarConta(id);
+      if (btn.dataset.action === 'delete-cp')    deleteContaPagar(id);
+    };
+  }
 }
 
 async function pagarConta(id) {
@@ -865,21 +967,24 @@ async function deleteContaPagar(id) {
 }
 
 async function saveContaPagar() {
-  const fornecedor = qs('#cp-fornecedor')?.value.trim();
-  const descricao  = qs('#cp-descricao')?.value.trim();
+  const fornecedor = sanitizeText(qs('#cp-fornecedor')?.value, 200);
+  const descricao  = sanitizeText(qs('#cp-descricao')?.value, 300);
   const emissao    = qs('#cp-emissao')?.value;
   const vencimento = qs('#cp-vencimento')?.value;
   const valorRaw   = qs('#cp-valor')?.value;
-  const categoria  = qs('#cp-categoria')?.value;
-  const forma      = qs('#cp-forma')?.value;
+  const categoria  = sanitizeText(qs('#cp-categoria')?.value, 100);
+  const forma      = sanitizeText(qs('#cp-forma')?.value, 100);
 
   if (!fornecedor || !descricao || !vencimento || !valorRaw) {
     toast('Preencha todos os campos obrigatórios.', 'error'); return;
   }
-  const valor = parseFloat(valorRaw);
-  if (isNaN(valor) || valor <= 0) { toast('Valor inválido.', 'error'); return; }
+  if (!isValidDate(vencimento)) { toast('Data de vencimento inválida.', 'error'); return; }
+  if (emissao && !isValidDate(emissao)) { toast('Data de emissão inválida.', 'error'); return; }
 
-  const nova = { fornecedor, descricao, emissao, vencimento, valor, categoria, forma, status: 'Em Aberto', criadoEm: serverTimestamp() };
+  const valor = sanitizeNumber(valorRaw, 0.01);
+  if (valor === null) { toast('Valor inválido.', 'error'); return; }
+
+  const nova = { fornecedor, descricao, emissao: emissao || '', vencimento, valor, categoria, forma, status: 'Em Aberto', criadoEm: serverTimestamp() };
   try {
     const snap = await addDoc(colRef('contas a pagar'), nova);
     DB['contas a pagar'].unshift({ id: snap.id, ...nova });
@@ -906,6 +1011,7 @@ function renderContasReceber() {
 
   const sBadge = { 'Em Aberto': 'badge-blue', 'Recebida': 'badge-green', 'Vencida': 'badge-amber' };
   tbody.innerHTML = DB['contas a receber'].map(c => {
+    const safeId   = sanitizeId(c.id);
     const cliente  = c.cliente   || c.fornecedor || '—';
     const desc     = c.descricao || c['descriçao'] || '—';
     const emissao  = c.emissao   || c.criasoEM   || c.criadoEm || '';
@@ -913,17 +1019,18 @@ function renderContasReceber() {
     const valor    = Number(c.valor) || 0;
     const forma    = c.forma     || '—';
     const status   = c.status    || 'Em Aberto';
+    const statusSafe = ['Em Aberto', 'Recebida', 'Vencida'].includes(status) ? status : 'Em Aberto';
     return `<tr>
-    <td style="font-weight:600">${cliente}</td>
-    <td style="color:var(--text-secondary);font-size:12.5px">${desc}</td>
-    <td>${fmtDate(typeof emissao === 'string' ? emissao : '')}</td>
-    <td>${fmtDate(venc)}</td>
+    <td style="font-weight:600">${esc(cliente)}</td>
+    <td style="color:var(--text-secondary);font-size:12.5px">${esc(desc)}</td>
+    <td>${esc(fmtDate(typeof emissao === 'string' ? emissao : ''))}</td>
+    <td>${esc(fmtDate(venc))}</td>
     <td class="mono">${fmt(valor)}</td>
-    <td style="color:var(--text-secondary);font-size:12px">${forma}</td>
-    <td><span class="badge ${sBadge[status] || 'badge-neutral'}">${status}</span></td>
+    <td style="color:var(--text-secondary);font-size:12px">${esc(forma)}</td>
+    <td><span class="badge ${sBadge[statusSafe] || 'badge-neutral'}">${esc(statusSafe)}</span></td>
     <td style="display:flex;gap:5px">
-      ${status !== 'Recebida' ? `<button class="btn btn-success btn-xs" onclick="receberConta('${c.id}')">Receber</button>` : ''}
-      <button class="btn btn-danger btn-xs btn-icon" onclick="deleteContaReceber('${c.id}')">${Icon.trash}</button>
+      ${statusSafe !== 'Recebida' ? `<button class="btn btn-success btn-xs" data-id="${safeId}" data-action="receber-conta">Receber</button>` : ''}
+      <button class="btn btn-danger btn-xs btn-icon" data-id="${safeId}" data-action="delete-cr">${Icon.trash}</button>
     </td>
   </tr>`;
   }).join('');
@@ -937,6 +1044,17 @@ function renderContasReceber() {
   if (s('#kpi-cr-vencida'))  s('#kpi-cr-vencida').textContent  = fmt(vencida);
   if (s('#kpi-cr-recebida')) s('#kpi-cr-recebida').textContent = fmt(recebida);
   if (s('#kpi-cr-total'))    s('#kpi-cr-total').textContent    = fmt(total);
+
+  if (tbody) {
+    tbody.onclick = e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      if (!id) return;
+      if (btn.dataset.action === 'receber-conta') receberConta(id);
+      if (btn.dataset.action === 'delete-cr')     deleteContaReceber(id);
+    };
+  }
 }
 
 async function receberConta(id) {
@@ -956,21 +1074,24 @@ async function deleteContaReceber(id) {
 }
 
 async function saveContaReceber() {
-  const cliente    = qs('#cr-cliente')?.value.trim();
-  const descricao  = qs('#cr-descricao')?.value.trim();
+  const cliente    = sanitizeText(qs('#cr-cliente')?.value, 200);
+  const descricao  = sanitizeText(qs('#cr-descricao')?.value, 300);
   const emissao    = qs('#cr-emissao')?.value;
   const vencimento = qs('#cr-vencimento')?.value;
   const valorRaw   = qs('#cr-valor')?.value;
-  const categoria  = qs('#cr-categoria')?.value;
-  const forma      = qs('#cr-forma')?.value;
+  const categoria  = sanitizeText(qs('#cr-categoria')?.value, 100);
+  const forma      = sanitizeText(qs('#cr-forma')?.value, 100);
 
   if (!cliente || !descricao || !vencimento || !valorRaw) {
     toast('Preencha todos os campos obrigatórios.', 'error'); return;
   }
-  const valor = parseFloat(valorRaw);
-  if (isNaN(valor) || valor <= 0) { toast('Valor inválido.', 'error'); return; }
+  if (!isValidDate(vencimento)) { toast('Data de vencimento inválida.', 'error'); return; }
+  if (emissao && !isValidDate(emissao)) { toast('Data de emissão inválida.', 'error'); return; }
 
-  const nova = { cliente, descricao, emissao, vencimento, valor, categoria, forma, status: 'Em Aberto', criadoEm: serverTimestamp() };
+  const valor = sanitizeNumber(valorRaw, 0.01);
+  if (valor === null) { toast('Valor inválido.', 'error'); return; }
+
+  const nova = { cliente, descricao, emissao: emissao || '', vencimento, valor, categoria, forma, status: 'Em Aberto', criadoEm: serverTimestamp() };
   try {
     const snap = await addDoc(colRef('contas a receber'), nova);
     DB['contas a receber'].unshift({ id: snap.id, ...nova });
@@ -1001,8 +1122,8 @@ function renderPlanoContas(filter) {
     const indent   = `padding-left:${16 + c.nivel * 20}px`;
     const natBadge = c.nat === 'D' ? 'badge-blue' : 'badge-green';
     return `<div class="account-node ${c.nivel === 0 ? 'is-group' : ''}" style="${indent}">
-      <span class="account-code">${c.cod}</span>
-      <span class="account-name">${c.nome}</span>
+      <span class="account-code">${esc(c.cod)}</span>
+      <span class="account-name">${esc(c.nome)}</span>
       <span class="badge ${natBadge}" style="font-size:10px">${c.nat === 'D' ? 'Devedora' : 'Credora'}</span>
       <span class="badge badge-neutral" style="font-size:10px">${c.tipo === 'A' ? 'Analítica' : 'Sintética'}</span>
       <span class="account-balance">${c.saldo !== null && c.saldo !== undefined ? fmt(c.saldo) : ''}</span>
@@ -1025,8 +1146,8 @@ function renderBalancete() {
     const mD    = isD ? +(c.saldo * 0.18).toFixed(2) : 0;
     const mC    = !isD ? +(c.saldo * 0.18).toFixed(2) : 0;
     return `<tr>
-      <td class="mono" style="font-size:11.5px;color:var(--text-tertiary)">${c.cod}</td>
-      <td>${c.nome}</td>
+      <td class="mono" style="font-size:11.5px;color:var(--text-tertiary)">${esc(c.cod)}</td>
+      <td>${esc(c.nome)}</td>
       <td class="mono text-right">${sAntD > 0 ? fmt(sAntD) : ''}</td>
       <td class="mono text-right">${sAntC > 0 ? fmt(sAntC) : ''}</td>
       <td class="mono text-right" style="color:var(--text-secondary)">${mD > 0 ? fmt(mD) : ''}</td>
@@ -1045,14 +1166,18 @@ function renderFluxoCaixa() {
   const tbody = qs('#tb-fluxo');
   if (!tbody) return;
   const tipoCor = { Receita: 'badge-green', Despesa: 'badge-red', Tributo: 'badge-amber', Saldo: 'badge-blue' };
-  tbody.innerHTML = DB.fluxoCaixa.map(f => `<tr>
-    <td>${fmtDate(f.data)}</td>
-    <td>${f.descricao}</td>
-    <td><span class="badge ${tipoCor[f.tipo] || 'badge-neutral'}">${f.tipo}</span></td>
+  const tiposValidos = new Set(['Receita', 'Despesa', 'Tributo', 'Saldo']);
+  tbody.innerHTML = DB.fluxoCaixa.map(f => {
+    const tipoSafe = tiposValidos.has(f.tipo) ? f.tipo : 'Saldo';
+    return `<tr>
+    <td>${esc(fmtDate(f.data))}</td>
+    <td>${esc(f.descricao)}</td>
+    <td><span class="badge ${tipoCor[tipoSafe] || 'badge-neutral'}">${esc(tipoSafe)}</span></td>
     <td class="mono text-right" style="color:var(--success)">${f.entrada > 0 ? fmt(f.entrada) : ''}</td>
     <td class="mono text-right" style="color:var(--danger)">${f.saida > 0 ? fmt(f.saida) : ''}</td>
     <td class="mono text-right" style="font-weight:600">${fmt(f.saldo)}</td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 // ============================================================
@@ -1166,6 +1291,8 @@ function renderBalanco() {
 function renderRelatorios() {
   const grid = qs('#relatorios-grid');
   if (!grid) return;
+
+  // Dados estáticos — definidos no código, não vindos do banco
   const items = [
     { title: 'DRE Mensal',              desc: 'Demonstração do Resultado do Exercício por período', acao: 'dre' },
     { title: 'Balanço Patrimonial',     desc: 'Posição dos ativos, passivos e patrimônio líquido', acao: 'balanco' },
@@ -1178,23 +1305,40 @@ function renderRelatorios() {
     { title: 'SPED Contábil (ECD)',     desc: 'Escrituração Contábil Digital para Receita Federal', acao: null },
   ];
 
-  grid.innerHTML = items.map(item => `
+  // Páginas válidas — whitelist para navegação segura
+  const paginasValidas = new Set(['dre', 'balanco', 'fluxo-caixa', 'balancete', 'contas-pagar', 'contas-receber']);
+
+  grid.innerHTML = items.map((item, idx) => `
     <div class="card" style="transition:border-color 0.15s"
          onmouseenter="this.style.borderColor='var(--border-base)'"
          onmouseleave="this.style.borderColor='var(--border-subtle)'">
       <div class="card-body" style="display:flex;flex-direction:column;gap:14px">
         <div>
-          <div style="font-size:14px;font-weight:600;margin-bottom:5px">${item.title}</div>
-          <div style="font-size:12px;color:var(--text-tertiary);line-height:1.55">${item.desc}</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:5px">${esc(item.title)}</div>
+          <div style="font-size:12px;color:var(--text-tertiary);line-height:1.55">${esc(item.desc)}</div>
         </div>
         <div style="display:flex;gap:6px;margin-top:auto">
           ${item.acao
-            ? `<button class="btn btn-secondary btn-sm" onclick="navigate('${item.acao}')" style="flex:1">Visualizar</button>`
+            ? `<button class="btn btn-secondary btn-sm" data-action="nav-relatorio" data-acao="${esc(item.acao)}" style="flex:1">Visualizar</button>`
             : `<button class="btn btn-secondary btn-sm" style="flex:1" disabled>Em breve</button>`}
-          <button class="btn btn-secondary btn-sm btn-icon" onclick="toast('Gerando ${item.title}...','info')" title="Exportar PDF">${Icon.download}</button>
+          <button class="btn btn-secondary btn-sm btn-icon" data-action="exportar-relatorio" data-title="${esc(item.title)}" title="Exportar PDF">${Icon.download}</button>
         </div>
       </div>
     </div>`).join('');
+
+  // Delegação de eventos — sem onclick inline com dados externos
+  grid.onclick = e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    if (btn.dataset.action === 'nav-relatorio') {
+      const acao = btn.dataset.acao;
+      if (paginasValidas.has(acao)) navigate(acao);
+    }
+    if (btn.dataset.action === 'exportar-relatorio') {
+      const title = btn.dataset.title || 'Relatório';
+      toast(`Gerando ${title}...`, 'info');
+    }
+  };
 }
 
 // ============================================================
@@ -1205,9 +1349,14 @@ function renderEmpresas() {
   const grid = qs('#empresas-grid');
   if (!grid) return;
   const corMap = { blue: 'var(--accent)', green: 'var(--success)', amber: 'var(--warning)' };
+  // Whitelist de cores — nunca interpola e.cor diretamente no CSS
+  const coresValidas = new Set(['blue', 'green', 'amber']);
 
   grid.innerHTML = DB.empresas.map(e => {
-    const cor = corMap[e.cor] || 'var(--accent)';
+    const safeId  = sanitizeId(e.id);
+    const corKey  = coresValidas.has(e.cor) ? e.cor : 'blue';
+    const cor     = corMap[corKey];
+    const inicial = esc((e.razao || '?')[0]);
     return `
     <div class="card" style="overflow:visible">
       <div style="height:2px;background:${cor};border-radius:var(--r-lg) var(--r-lg) 0 0"></div>
@@ -1216,25 +1365,35 @@ function renderEmpresas() {
           <div style="width:40px;height:40px;border-radius:10px;background:${cor};
             display:flex;align-items:center;justify-content:center;
             font-weight:700;font-size:15px;color:#fff;flex-shrink:0">
-            ${e.razao[0]}
+            ${inicial}
           </div>
           <div>
-            <div style="font-weight:600;font-size:14px;line-height:1.3">${e.razao}</div>
-            <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">${e.regime}</div>
+            <div style="font-weight:600;font-size:14px;line-height:1.3">${esc(e.razao)}</div>
+            <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">${esc(e.regime)}</div>
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;font-size:12.5px">
-          <div style="display:flex;gap:8px"><span style="color:var(--text-tertiary);min-width:52px">CNPJ</span><span class="mono" style="font-size:12px">${e.cnpj}</span></div>
-          <div style="display:flex;gap:8px"><span style="color:var(--text-tertiary);min-width:52px">CNAE</span><span>${e.cnae || '—'}</span></div>
-          <div style="display:flex;gap:8px"><span style="color:var(--text-tertiary);min-width:52px">E-mail</span><span style="color:var(--text-secondary)">${e.email || '—'}</span></div>
+          <div style="display:flex;gap:8px"><span style="color:var(--text-tertiary);min-width:52px">CNPJ</span><span class="mono" style="font-size:12px">${esc(e.cnpj)}</span></div>
+          <div style="display:flex;gap:8px"><span style="color:var(--text-tertiary);min-width:52px">CNAE</span><span>${esc(e.cnae || '—')}</span></div>
+          <div style="display:flex;gap:8px"><span style="color:var(--text-tertiary);min-width:52px">E-mail</span><span style="color:var(--text-secondary)">${esc(e.email || '—')}</span></div>
         </div>
         <div style="display:flex;gap:6px;margin-top:16px">
-          <button class="btn btn-secondary btn-sm" style="flex:1" onclick="toast('Abrindo ${e.razao}...','info')">Selecionar</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteEmpresa('${e.id}')" title="Remover">${Icon.trash}</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1" data-id="${safeId}" data-action="selecionar-empresa" data-razao="${esc(e.razao)}">Selecionar</button>
+          <button class="btn btn-danger btn-sm btn-icon" data-id="${safeId}" data-action="delete-empresa" title="Remover">${Icon.trash}</button>
         </div>
       </div>
     </div>`;
   }).join('');
+
+  // Delegação de eventos — sem onclick inline com dados do banco
+  grid.onclick = e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const id    = btn.dataset.id;
+    const razao = btn.dataset.razao || '';
+    if (btn.dataset.action === 'selecionar-empresa') toast(`Abrindo ${razao}...`, 'info');
+    if (btn.dataset.action === 'delete-empresa' && id) deleteEmpresa(id);
+  };
 }
 
 async function deleteEmpresa(id) {
@@ -1245,16 +1404,29 @@ async function deleteEmpresa(id) {
 }
 
 async function saveEmpresa() {
-  const razao  = qs('#emp-razao')?.value.trim();
-  const cnpj   = qs('#emp-cnpj')?.value.trim();
-  const ie     = qs('#emp-ie')?.value.trim();       // BUG CORRIGIDO: id adicionado no HTML
+  const razao  = sanitizeText(qs('#emp-razao')?.value, 200);
+  const cnpj   = sanitizeText(qs('#emp-cnpj')?.value, 20);
+  const ie     = sanitizeText(qs('#emp-ie')?.value, 50);
   const regime = qs('#emp-regime')?.value;
-  const cnae   = qs('#emp-cnae')?.value.trim();
-  const email  = qs('#emp-email')?.value.trim();
+  const cnae   = sanitizeText(qs('#emp-cnae')?.value, 20);
+  const email  = sanitizeText(qs('#emp-email')?.value, 200);
 
   if (!razao || !cnpj) { toast('Preencha todos os campos obrigatórios.', 'error'); return; }
 
-  const nova = { razao, cnpj, ie: ie || '', regime, cnae, atividade: '', email, cor: 'blue', criadoEm: serverTimestamp() };
+  // Valida CNPJ: permite formato XX.XXX.XXX/XXXX-XX ou só dígitos
+  const cnpjDigitos = cnpj.replace(/\D/g, '');
+  if (cnpjDigitos.length !== 14) { toast('CNPJ inválido. Informe os 14 dígitos.', 'error'); return; }
+
+  // Valida e-mail se fornecido
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    toast('E-mail inválido.', 'error'); return;
+  }
+
+  // Whitelist de regimes tributários
+  const regimesValidos = ['Simples Nacional', 'Lucro Presumido', 'Lucro Real', 'MEI'];
+  const regimeSafe = regimesValidos.includes(regime) ? regime : 'Simples Nacional';
+
+  const nova = { razao, cnpj, ie: ie || '', regime: regimeSafe, cnae, atividade: '', email, cor: 'blue', criadoEm: serverTimestamp() };
   try {
     const snap = await addDoc(colRef('empresas'), nova);
     DB.empresas.push({ id: snap.id, ...nova });
