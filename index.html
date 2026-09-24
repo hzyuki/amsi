@@ -37,24 +37,20 @@
         </svg>
       </div>
       <div class="login-title">AMSI Contabilidade</div>
-      <div class="login-sub">Entre com suas credenciais para acessar o sistema</div>
+      <div class="login-sub">Entre com sua conta Google para acessar o sistema</div>
     </div>
 
     <div class="login-form">
-      <div id="login-error" class="login-error"></div>
-
-      <div class="form-group">
-        <label class="form-label">E-mail</label>
-        <input type="email" class="form-control" id="login-email" placeholder="seu@email.com.br" autocomplete="email">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Senha</label>
-        <input type="password" class="form-control" id="login-senha" placeholder="••••••••" autocomplete="current-password">
-      </div>
+      <p id="login-error" class="error login-error"></p>
 
       <button class="btn-login" id="btn-login" onclick="fazerLogin()">
-        <span class="btn-text">Entrar no Sistema</span>
+        <svg class="google-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#4285F4" d="M21.35 12.27c0-.79-.07-1.55-.2-2.27H12v4.3h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.42z"/>
+          <path fill="#34A853" d="M12 21.8c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.53A9.74 9.74 0 0 0 12 21.8z"/>
+          <path fill="#FBBC05" d="M6.54 13.88A5.86 5.86 0 0 1 6.23 12c0-.65.11-1.28.31-1.88V7.59H3.3A9.74 9.74 0 0 0 2.26 12c0 1.58.38 3.08 1.04 4.41l3.24-2.53z"/>
+          <path fill="#EA4335" d="M12 6.09c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.18 14.63 2.2 12 2.2a9.74 9.74 0 0 0-8.7 5.39l3.24 2.53C7.31 7.81 9.46 6.09 12 6.09z"/>
+        </svg>
+        <span class="btn-text">Entrar com Google</span>
         <span class="btn-spinner"></span>
       </button>
     </div>
@@ -383,7 +379,8 @@
                 <option value="Débito">Débito</option>
                 <option value="Crédito">Crédito</option>
               </select>
-              <input type="month" class="form-control" value="2025-03" style="width:auto;padding:6px 10px;font-size:12px">
+              <input type="date" class="form-control" id="data-inicio" aria-label="Data inicial" style="width:auto;padding:6px 10px;font-size:12px">
+              <input type="date" class="form-control" id="data-fim" aria-label="Data final" style="width:auto;padding:6px 10px;font-size:12px">
             </div>
           </div>
           <div class="table-wrap">
@@ -402,6 +399,9 @@
               </thead>
               <tbody id="tb-lancamentos"></tbody>
             </table>
+          </div>
+          <div style="display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border-subtle)">
+            <button class="btn btn-secondary btn-sm" onclick="loadMore('lancamentos')">Carregar mais</button>
           </div>
         </div>
 
@@ -449,6 +449,9 @@
               <tbody id="tb-contas-pagar"></tbody>
             </table>
           </div>
+          <div style="display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border-subtle)">
+            <button class="btn btn-secondary btn-sm" onclick="loadMore('contas a pagar')">Carregar mais</button>
+          </div>
         </div>
 
       </div><!-- /contas-pagar -->
@@ -494,6 +497,9 @@
               </thead>
               <tbody id="tb-contas-receber"></tbody>
             </table>
+          </div>
+          <div style="display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border-subtle)">
+            <button class="btn btn-secondary btn-sm" onclick="loadMore('contas a receber')">Carregar mais</button>
           </div>
         </div>
 
@@ -737,6 +743,7 @@
       </button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="lanc-id">
       <div class="form-grid-2 form-row">
         <div class="form-group"><label class="form-label">Data *</label><input type="date" class="form-control" id="lanc-data"></div>
         <div class="form-group"><label class="form-label">Tipo *</label>
@@ -768,6 +775,7 @@
       </button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="cp-id">
       <div class="form-group form-row"><label class="form-label">Fornecedor *</label><input class="form-control" id="cp-fornecedor" placeholder="Nome do fornecedor ou credor"></div>
       <div class="form-group form-row"><label class="form-label">Descrição *</label><input class="form-control" id="cp-descricao" placeholder="Descrição da conta"></div>
       <div class="form-grid-3 form-row">
@@ -807,6 +815,7 @@
       </button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="cr-id">
       <div class="form-group form-row"><label class="form-label">Cliente *</label><input class="form-control" id="cr-cliente" placeholder="Nome do cliente ou devedor"></div>
       <div class="form-group form-row"><label class="form-label">Descrição *</label><input class="form-control" id="cr-descricao" placeholder="Descrição do título"></div>
       <div class="form-grid-3 form-row">
@@ -846,6 +855,7 @@
       </button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="emp-id">
       <div class="form-group form-row"><label class="form-label">Razão Social *</label><input class="form-control" id="emp-razao" placeholder="Nome completo da empresa"></div>
       <div class="form-grid-2 form-row">
         <div class="form-group"><label class="form-label">CNPJ *</label><input class="form-control" id="emp-cnpj" placeholder="00.000.000/0000-00"></div>
@@ -864,6 +874,23 @@
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="closeModal('modal-empresa')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveEmpresa()">Cadastrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirmação de exclusão -->
+<div class="modal-backdrop" id="modal-confirm-delete">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title">
+    <div class="modal-head">
+      <span class="modal-title" id="confirm-delete-title">Confirmar exclusão</span>
+      <button class="modal-close" onclick="closeModal('modal-confirm-delete')" aria-label="Cancelar">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body"><p id="confirm-delete-text" style="color:var(--text-secondary);line-height:1.6"></p></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('modal-confirm-delete')">Cancelar</button>
+      <button class="btn btn-danger" onclick="executeDelete()">Confirmar exclusão</button>
     </div>
   </div>
 </div>

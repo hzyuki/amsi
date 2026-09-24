@@ -12,7 +12,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
   getAuth,
-  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
@@ -26,7 +27,9 @@ import {
   doc,
   serverTimestamp,
   query,
-  orderBy
+  orderBy,
+  limit,
+  startAfter
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -42,6 +45,7 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const auth        = getAuth(firebaseApp);
 const db          = getFirestore(firebaseApp);
+const provider    = new GoogleAuthProvider();
 
 // ID da empresa ativa (usa a primeira empresa ou pode ser selecionado)
 // Por enquanto usamos uma coleção raiz por usuário via uid
@@ -130,12 +134,13 @@ function sanitizeId(id) {
 // ============================================================
 
 function colRef(nome) {
-  // Estrutura: /{colecao} (raiz do Firestore)
-  return collection(db, nome);
+  if (!currentUser) throw new Error('Usuário não autenticado.');
+  return collection(db, 'users', currentUser.uid, nome);
 }
 
 function docRef(nome, id) {
-  return doc(db, nome, id);
+  if (!currentUser) throw new Error('Usuário não autenticado.');
+  return doc(db, 'users', currentUser.uid, nome, id);
 }
 
 // ============================================================
@@ -167,32 +172,21 @@ const Icon = {
 // ============================================================
 
 window.fazerLogin = async function() {
-  const email = qs('#login-email')?.value.trim();
-  const senha  = qs('#login-senha')?.value;
   const btn    = qs('#btn-login');
   const errEl  = qs('#login-error');
-
-  if (!email || !senha) {
-    errEl.textContent = 'Preencha e-mail e senha.';
-    errEl.classList.add('visible');
-    return;
-  }
 
   btn.classList.add('loading');
   btn.disabled = true;
   errEl.classList.remove('visible');
 
   try {
-    await signInWithEmailAndPassword(auth, email, senha);
-    // onAuthStateChanged vai cuidar do resto
+    await signInWithPopup(auth, provider);
   } catch (err) {
     const msgs = {
-      'auth/invalid-credential':      'E-mail ou senha incorretos.',
-      'auth/user-not-found':          'Usuário não encontrado.',
-      'auth/wrong-password':          'Senha incorreta.',
-      'auth/invalid-email':           'E-mail inválido.',
-      'auth/too-many-requests':       'Muitas tentativas. Aguarde e tente novamente.',
+      'auth/popup-closed-by-user':    'Login cancelado.',
+      'auth/cancelled-popup-request': 'Login cancelado.',
       'auth/network-request-failed':  'Erro de conexão. Verifique sua internet.',
+      'auth/unauthorized-domain':     'Este domínio não está autorizado no Firebase. Adicione-o em Authentication > Settings > Authorized domains.',
     };
     errEl.textContent = msgs[err.code] || `Erro: ${err.message}`;
     errEl.classList.add('visible');
@@ -204,16 +198,6 @@ window.fazerLogin = async function() {
 window.fazerLogout = async function() {
   await signOut(auth);
 };
-
-// Tecla Enter no campo de senha faz login
-document.addEventListener('DOMContentLoaded', () => {
-  qs('#login-senha')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') window.fazerLogin();
-  });
-  qs('#login-email')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') qs('#login-senha')?.focus();
-  });
-});
 
 // ============================================================
 // OBSERVER DE AUTENTICAÇÃO – ponto central de inicialização
@@ -363,6 +347,8 @@ async function initApp() {
 
   // Lançamentos filter
   qs('#filter-tipo')?.addEventListener('change', renderLancamentos);
+  qs('#data-inicio')?.addEventListener('change', renderLancamentos);
+  qs('#data-fim')?.addEventListener('change', renderLancamentos);
 
   // Setar datas de hoje nos formulários
   const dataHoje = hoje();
@@ -375,17 +361,23 @@ async function initApp() {
   window.navigate          = navigate;
   window.openModal         = openModal;
   window.closeModal        = closeModal;
+  window.executeDelete     = executeDelete;
   window.toast             = toast;
   window.deleteLancamento  = deleteLancamento;
+  window.editLancamento    = editLancamento;
   window.saveLancamento    = saveLancamento;
   window.deleteContaPagar  = deleteContaPagar;
+  window.editContaPagar    = editContaPagar;
   window.pagarConta        = pagarConta;
   window.saveContaPagar    = saveContaPagar;
   window.deleteContaReceber= deleteContaReceber;
+  window.editContaReceber  = editContaReceber;
   window.receberConta      = receberConta;
   window.saveContaReceber  = saveContaReceber;
   window.deleteEmpresa     = deleteEmpresa;
+  window.editEmpresa       = editEmpresa;
   window.saveEmpresa       = saveEmpresa;
+  window.loadMore          = loadMore;
   window.renderPlanoContas = renderPlanoContas;
 
   // Carrega dados do Firestore e renderiza
@@ -406,12 +398,18 @@ const DB = {
   empresas:          [],
 };
 
+const pageState = {
+  lancamentos: { last: null, loading: false, done: false },
+  'contas a pagar': { last: null, loading: false, done: false },
+  'contas a receber': { last: null, loading: false, done: false },
+};
+
 async function carregarTudo() {
   // Carrega cada coleção individualmente — se uma falhar, usa demo só para ela
   const colecoes = [
-    { nome: 'lancamentos',       buildQ: q => query(q, orderBy('data', 'desc')),       demoKey: 'lancamentos' },
-    { nome: 'contas a pagar',    buildQ: q => query(q, orderBy('vencimento', 'asc')),  demoKey: 'contas a pagar' },
-    { nome: 'contas a receber',  buildQ: q => query(q, orderBy('vencimento', 'asc')),  demoKey: 'contas a receber' },
+    { nome: 'lancamentos',       buildQ: q => query(q, orderBy('data', 'desc'), limit(50)),       demoKey: 'lancamentos' },
+    { nome: 'contas a pagar',    buildQ: q => query(q, orderBy('vencimento', 'asc'), limit(50)),  demoKey: 'contas a pagar' },
+    { nome: 'contas a receber',  buildQ: q => query(q, orderBy('vencimento', 'asc'), limit(50)),  demoKey: 'contas a receber' },
     { nome: 'planoContas',       buildQ: q => q,                                        demoKey: 'planoContas' },
     { nome: 'fluxoCaixa',        buildQ: q => query(q, orderBy('data', 'asc')),         demoKey: 'fluxoCaixa' },
     { nome: 'empresas',          buildQ: q => q,                                        demoKey: 'empresas' },
@@ -450,12 +448,16 @@ async function carregarTudo() {
     try {
       const ref  = colRef(nome);
       const snap = await getDocs(buildQ(ref));
+      if (pageState[nome]) {
+        pageState[nome].last = snap.docs.at(-1) || null;
+        pageState[nome].done = snap.docs.length < 50;
+      }
       if (snap.docs.length > 0) {
         DB[nome] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         algumFirestore = true;
       } else {
         // Coleção existe mas está vazia — tenta sem ordenação
-        const snapSemOrdem = await getDocs(ref);
+        const snapSemOrdem = await getDocs(query(ref, limit(50)));
         if (snapSemOrdem.docs.length > 0) {
           DB[nome] = snapSemOrdem.docs.map(d => ({ id: d.id, ...d.data() }));
           algumFirestore = true;
@@ -468,7 +470,7 @@ async function carregarTudo() {
       // Tenta sem orderBy (pode faltar índice)
       try {
         const ref  = colRef(nome);
-        const snap = await getDocs(ref);
+        const snap = await getDocs(query(ref, limit(50)));
         if (snap.docs.length > 0) {
           DB[nome] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           algumFirestore = true;
@@ -498,6 +500,27 @@ async function carregarTudo() {
   renderRelatorios();
   renderEmpresas();
   renderDashboard();
+}
+
+async function loadMore(nome) {
+  const state = pageState[nome];
+  if (!state || state.loading || state.done || !state.last) return;
+  state.loading = true;
+  try {
+    const orderField = nome === 'lancamentos' ? 'data' : 'vencimento';
+    const direction = nome === 'lancamentos' ? 'desc' : 'asc';
+    const snap = await getDocs(query(colRef(nome), orderBy(orderField, direction), startAfter(state.last), limit(50)));
+    state.last = snap.docs.at(-1) || state.last;
+    state.done = snap.docs.length < 50;
+    DB[nome].push(...snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    if (nome === 'lancamentos') renderLancamentos();
+    if (nome === 'contas a pagar') renderContasPagar();
+    if (nome === 'contas a receber') renderContasReceber();
+  } catch (err) {
+    toast('Não foi possível carregar mais registros.', 'error');
+  } finally {
+    state.loading = false;
+  }
 }
 
 async function carregarColecao(nome, buildQuery) {
@@ -632,7 +655,34 @@ function navigate(pageId) {
 // ============================================================
 
 function openModal(id)  { qs(`#${id}`)?.classList.add('open'); }
-function closeModal(id) { qs(`#${id}`)?.classList.remove('open'); }
+function closeModal(id) {
+  const modal = qs(`#${id}`);
+  modal?.classList.remove('open');
+  const hidden = modal?.querySelector('input[type="hidden"]');
+  if (hidden) hidden.value = '';
+  const titles = {
+    'modal-lancamento': 'Novo Lançamento Contábil',
+    'modal-conta-pagar': 'Nova Conta a Pagar',
+    'modal-conta-receber': 'Nova Conta a Receber',
+    'modal-empresa': 'Cadastrar Empresa',
+  };
+  if (titles[id]) qs(`#${id} .modal-title`).textContent = titles[id];
+}
+
+let pendingDelete = null;
+function confirmDelete(label, callback) {
+  const text = qs('#confirm-delete-text');
+  if (text) text.textContent = `Você está prestes a excluir: ${label}. Esta ação não pode ser desfeita.`;
+  pendingDelete = callback;
+  openModal('modal-confirm-delete');
+}
+
+function executeDelete() {
+  const callback = pendingDelete;
+  pendingDelete = null;
+  closeModal('modal-confirm-delete');
+  if (callback) callback();
+}
 
 // ============================================================
 // TOAST
@@ -707,21 +757,34 @@ function renderDashboard() {
 function renderBarChart() {
   const wrap = qs('#bar-chart');
   if (!wrap) return;
-  const meses    = ['Out', 'Nov', 'Dez', 'Jan', 'Fev', 'Mar'];
-  const receitas = [98000, 112400, 105800, 118200, 131600, 148320];
-  const despesas = [72300, 84100, 79400, 88600, 89200, 93740];
+  const meses = [];
+  const agora = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const data = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+    const chave = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+    const label = data.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+    meses.push({ chave, label: label.charAt(0).toUpperCase() + label.slice(1) });
+  }
+  const totais = meses.map(({ chave }) => DB.lancamentos.reduce((soma, lanc) => {
+    if (!lanc.data?.startsWith(chave)) return soma;
+    const campo = lanc.tipo === 'Crédito' ? 'receita' : 'despesa';
+    soma[campo] += Number(lanc.valor || 0);
+    return soma;
+  }, { receita: 0, despesa: 0 }));
+  const receitas = totais.map(t => t.receita);
+  const despesas = totais.map(t => t.despesa);
   const maxVal   = Math.max(...receitas, ...despesas);
 
-  wrap.innerHTML = meses.map((m, i) => {
-    const hR = Math.round((receitas[i] / maxVal) * 100);
-    const hD = Math.round((despesas[i] / maxVal) * 100);
+  wrap.innerHTML = meses.map((mes, i) => {
+    const hR = maxVal ? Math.round((receitas[i] / maxVal) * 100) : 0;
+    const hD = maxVal ? Math.round((despesas[i] / maxVal) * 100) : 0;
     return `
     <div class="bar-col">
       <div class="bar-pair">
-        <div class="bar c-blue" style="height:${hR}%" title="Receita ${m}: ${fmt(receitas[i])}"></div>
-        <div class="bar c-red"  style="height:${hD}%" title="Despesa ${m}: ${fmt(despesas[i])}"></div>
+        <div class="bar c-blue" style="height:${hR}%" title="Receita ${mes.label}: ${fmt(receitas[i])}"></div>
+        <div class="bar c-red"  style="height:${hD}%" title="Despesa ${mes.label}: ${fmt(despesas[i])}"></div>
       </div>
-      <span class="bar-lbl">${m}</span>
+      <span class="bar-lbl">${mes.label}</span>
     </div>`;
   }).join('');
 }
@@ -780,7 +843,12 @@ function renderDonut() {
 
 function renderLancamentos() {
   const tipoFilter = qs('#filter-tipo')?.value || '';
-  const list = tipoFilter ? DB.lancamentos.filter(l => l.tipo === tipoFilter) : DB.lancamentos;
+  const dataInicio = qs('#data-inicio')?.value || '';
+  const dataFim = qs('#data-fim')?.value || '';
+  const list = DB.lancamentos.filter(l => {
+    return (!tipoFilter || l.tipo === tipoFilter) &&
+      (!dataInicio || l.data >= dataInicio) && (!dataFim || l.data <= dataFim);
+  });
   const tbody = qs('#tb-lancamentos');
   if (!tbody) return;
 
@@ -796,6 +864,7 @@ function renderLancamentos() {
       <td><span class="badge ${l.tipo === 'Crédito' ? 'badge-green' : 'badge-red'}">${esc(l.tipo)}</span></td>
       <td style="color:var(--text-tertiary);font-family:var(--font-mono);font-size:12px">${esc(l.documento)}</td>
       <td>
+        <button class="btn btn-secondary btn-xs" data-id="${safeId}" data-action="edit-lanc">Editar</button>
         <button class="btn btn-danger btn-xs btn-icon" data-id="${safeId}" data-action="delete-lanc" title="Excluir">${Icon.trash}</button>
       </td>
     </tr>`;
@@ -823,18 +892,36 @@ function renderLancamentos() {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const id = btn.dataset.id;
+      if (btn.dataset.action === 'edit-lanc' && id) editLancamento(id);
       if (btn.dataset.action === 'delete-lanc' && id) deleteLancamento(id);
     };
   }
 }
 
 async function deleteLancamento(id) {
-  DB.lancamentos = DB.lancamentos.filter(l => l.id !== id);
-  // Deleta no Firestore (ignora erro se for dado de demo)
-  try { await deleteDoc(docRef('lancamentos', id)); } catch {}
-  renderLancamentos();
-  renderDashboard();
-  toast('Lançamento removido.', 'info');
+  const lanc = DB.lancamentos.find(l => l.id === id);
+  if (!lanc) return;
+  confirmDelete(lanc.historico || 'lançamento', async () => {
+    DB.lancamentos = DB.lancamentos.filter(l => l.id !== id);
+    try { await deleteDoc(docRef('lancamentos', id)); } catch {}
+    renderLancamentos(); renderDashboard();
+    toast('Lançamento removido.', 'info');
+  });
+}
+
+function editLancamento(id) {
+  const lanc = DB.lancamentos.find(l => l.id === id);
+  if (!lanc) return;
+  qs('#lanc-id').value = id;
+  qs('#lanc-data').value = lanc.data || '';
+  qs('#lanc-tipo').value = lanc.tipo || 'Débito';
+  qs('#lanc-debito').value = lanc.debito || '';
+  qs('#lanc-credito').value = lanc.credito || '';
+  qs('#lanc-historico').value = lanc.historico || '';
+  qs('#lanc-valor').value = lanc.valor || '';
+  qs('#lanc-documento').value = lanc.documento === '—' ? '' : (lanc.documento || '');
+  qs('#modal-lancamento .modal-title').textContent = 'Editar Lançamento Contábil';
+  openModal('modal-lancamento');
 }
 
 async function saveLancamento() {
@@ -863,21 +950,27 @@ async function saveLancamento() {
   const tiposValidos = ['Crédito', 'Débito'];
   const tipoSafe = tiposValidos.includes(tipo) ? tipo : 'Débito';
 
-  const novoLanc = { data, historico, debito, credito, valor, tipo: tipoSafe, documento: documento || '—', criadoEm: serverTimestamp(), criadoPor: currentUser.uid };
+  const editId = sanitizeId(qs('#lanc-id')?.value);
+  const novoLanc = { data, historico, debito, credito, valor, tipo: tipoSafe, documento: documento || '—', atualizadoEm: serverTimestamp(), criadoPor: currentUser.uid };
 
   try {
-    const docSnap = await addDoc(colRef('lancamentos'), novoLanc);
-    DB.lancamentos.unshift({ id: docSnap.id, ...novoLanc });
+    if (editId) {
+      await updateDoc(docRef('lancamentos', editId), novoLanc);
+      const index = DB.lancamentos.findIndex(l => l.id === editId);
+      if (index >= 0) DB.lancamentos[index] = { ...DB.lancamentos[index], ...novoLanc };
+    } else {
+      const docSnap = await addDoc(colRef('lancamentos'), novoLanc);
+      DB.lancamentos.unshift({ id: docSnap.id, ...novoLanc });
+    }
   } catch {
-    // Modo offline/demo
-    DB.lancamentos.unshift({ id: 'demo_' + Date.now(), ...novoLanc });
+    if (!editId) DB.lancamentos.unshift({ id: 'demo_' + Date.now(), ...novoLanc });
   }
 
   renderLancamentos();
   renderDashboard();
   closeModal('modal-lancamento');
-  toast('Lançamento registrado com sucesso.', 'success');
-  ['lanc-historico', 'lanc-valor', 'lanc-documento'].forEach(id => {
+  toast(editId ? 'Lançamento atualizado com sucesso.' : 'Lançamento registrado com sucesso.', 'success');
+  ['lanc-id', 'lanc-historico', 'lanc-valor', 'lanc-documento'].forEach(id => {
     const el = qs(`#${id}`); if (el) el.value = '';
   });
 }
@@ -920,6 +1013,7 @@ function renderContasPagar() {
     <td><span class="badge ${sBadge[statusSafe] || 'badge-neutral'}">${esc(statusSafe)}</span></td>
     <td style="display:flex;gap:5px">
       ${statusSafe === 'Em Aberto' ? `<button class="btn btn-success btn-xs" data-id="${safeId}" data-action="pagar-conta">Pagar</button>` : ''}
+      <button class="btn btn-secondary btn-xs" data-id="${safeId}" data-action="edit-cp">Editar</button>
       <button class="btn btn-danger btn-xs btn-icon" data-id="${safeId}" data-action="delete-cp">${Icon.trash}</button>
     </td>
   </tr>`;
@@ -942,6 +1036,7 @@ function renderContasPagar() {
       if (!btn) return;
       const id = btn.dataset.id;
       if (!id) return;
+      if (btn.dataset.action === 'edit-cp')       editContaPagar(id);
       if (btn.dataset.action === 'pagar-conta')  pagarConta(id);
       if (btn.dataset.action === 'delete-cp')    deleteContaPagar(id);
     };
@@ -959,11 +1054,28 @@ async function pagarConta(id) {
 }
 
 async function deleteContaPagar(id) {
-  DB['contas a pagar'] = DB['contas a pagar'].filter(x => x.id !== id);
-  try { await deleteDoc(docRef('contas a pagar', id)); } catch {}
-  renderContasPagar();
-  renderDashboard();
-  toast('Registro removido.', 'info');
+  const conta = DB['contas a pagar'].find(x => x.id === id);
+  if (!conta) return;
+  confirmDelete(conta.fornecedor || conta.descricao || 'conta a pagar', async () => {
+    DB['contas a pagar'] = DB['contas a pagar'].filter(x => x.id !== id);
+    try { await deleteDoc(docRef('contas a pagar', id)); } catch {}
+    renderContasPagar(); renderDashboard(); toast('Registro removido.', 'info');
+  });
+}
+
+function editContaPagar(id) {
+  const c = DB['contas a pagar'].find(x => x.id === id);
+  if (!c) return;
+  qs('#cp-id').value = id;
+  qs('#cp-fornecedor').value = c.fornecedor || '';
+  qs('#cp-descricao').value = c.descricao || c['descriçao'] || '';
+  qs('#cp-emissao').value = c.emissao || '';
+  qs('#cp-vencimento').value = c.vencimento || '';
+  qs('#cp-valor').value = c.valor || '';
+  qs('#cp-categoria').value = c.categoria || 'Outros';
+  qs('#cp-forma').value = c.forma || 'PIX';
+  qs('#modal-conta-pagar .modal-title').textContent = 'Editar Conta a Pagar';
+  openModal('modal-conta-pagar');
 }
 
 async function saveContaPagar() {
@@ -984,19 +1096,27 @@ async function saveContaPagar() {
   const valor = sanitizeNumber(valorRaw, 0.01);
   if (valor === null) { toast('Valor inválido.', 'error'); return; }
 
-  const nova = { fornecedor, descricao, emissao: emissao || '', vencimento, valor, categoria, forma, status: 'Em Aberto', criadoEm: serverTimestamp() };
+  const editId = sanitizeId(qs('#cp-id')?.value);
+  const existente = editId && DB['contas a pagar'].find(c => c.id === editId);
+  const nova = { fornecedor, descricao, emissao: emissao || '', vencimento, valor, categoria, forma, status: existente?.status || 'Em Aberto', atualizadoEm: serverTimestamp() };
   try {
-    const snap = await addDoc(colRef('contas a pagar'), nova);
-    DB['contas a pagar'].unshift({ id: snap.id, ...nova });
+    if (editId) {
+      await updateDoc(docRef('contas a pagar', editId), nova);
+      const index = DB['contas a pagar'].findIndex(c => c.id === editId);
+      if (index >= 0) DB['contas a pagar'][index] = { ...DB['contas a pagar'][index], ...nova };
+    } else {
+      const snap = await addDoc(colRef('contas a pagar'), nova);
+      DB['contas a pagar'].unshift({ id: snap.id, ...nova });
+    }
   } catch {
-    DB['contas a pagar'].unshift({ id: 'demo_' + Date.now(), ...nova });
+    if (!editId) DB['contas a pagar'].unshift({ id: 'demo_' + Date.now(), ...nova });
   }
 
   renderContasPagar();
   renderDashboard();
   closeModal('modal-conta-pagar');
-  toast('Conta a pagar registrada.', 'success');
-  ['cp-fornecedor', 'cp-descricao', 'cp-vencimento', 'cp-valor'].forEach(id => {
+  toast(editId ? 'Conta a pagar atualizada.' : 'Conta a pagar registrada.', 'success');
+  ['cp-id', 'cp-fornecedor', 'cp-descricao', 'cp-vencimento', 'cp-valor'].forEach(id => {
     const el = qs(`#${id}`); if (el) el.value = '';
   });
 }
@@ -1030,6 +1150,7 @@ function renderContasReceber() {
     <td><span class="badge ${sBadge[statusSafe] || 'badge-neutral'}">${esc(statusSafe)}</span></td>
     <td style="display:flex;gap:5px">
       ${statusSafe !== 'Recebida' ? `<button class="btn btn-success btn-xs" data-id="${safeId}" data-action="receber-conta">Receber</button>` : ''}
+      <button class="btn btn-secondary btn-xs" data-id="${safeId}" data-action="edit-cr">Editar</button>
       <button class="btn btn-danger btn-xs btn-icon" data-id="${safeId}" data-action="delete-cr">${Icon.trash}</button>
     </td>
   </tr>`;
@@ -1051,6 +1172,7 @@ function renderContasReceber() {
       if (!btn) return;
       const id = btn.dataset.id;
       if (!id) return;
+      if (btn.dataset.action === 'edit-cr')       editContaReceber(id);
       if (btn.dataset.action === 'receber-conta') receberConta(id);
       if (btn.dataset.action === 'delete-cr')     deleteContaReceber(id);
     };
@@ -1067,10 +1189,28 @@ async function receberConta(id) {
 }
 
 async function deleteContaReceber(id) {
-  DB['contas a receber'] = DB['contas a receber'].filter(x => x.id !== id);
-  try { await deleteDoc(docRef('contas a receber', id)); } catch {}
-  renderContasReceber();
-  toast('Registro removido.', 'info');
+  const conta = DB['contas a receber'].find(x => x.id === id);
+  if (!conta) return;
+  confirmDelete(conta.cliente || conta.descricao || 'conta a receber', async () => {
+    DB['contas a receber'] = DB['contas a receber'].filter(x => x.id !== id);
+    try { await deleteDoc(docRef('contas a receber', id)); } catch {}
+    renderContasReceber(); toast('Registro removido.', 'info');
+  });
+}
+
+function editContaReceber(id) {
+  const c = DB['contas a receber'].find(x => x.id === id);
+  if (!c) return;
+  qs('#cr-id').value = id;
+  qs('#cr-cliente').value = c.cliente || '';
+  qs('#cr-descricao').value = c.descricao || c['descriçao'] || '';
+  qs('#cr-emissao').value = c.emissao || '';
+  qs('#cr-vencimento').value = c.vencimento || '';
+  qs('#cr-valor').value = c.valor || '';
+  qs('#cr-categoria').value = c.categoria || 'Outros';
+  qs('#cr-forma').value = c.forma || 'PIX';
+  qs('#modal-conta-receber .modal-title').textContent = 'Editar Conta a Receber';
+  openModal('modal-conta-receber');
 }
 
 async function saveContaReceber() {
@@ -1091,18 +1231,26 @@ async function saveContaReceber() {
   const valor = sanitizeNumber(valorRaw, 0.01);
   if (valor === null) { toast('Valor inválido.', 'error'); return; }
 
-  const nova = { cliente, descricao, emissao: emissao || '', vencimento, valor, categoria, forma, status: 'Em Aberto', criadoEm: serverTimestamp() };
+  const editId = sanitizeId(qs('#cr-id')?.value);
+  const existente = editId && DB['contas a receber'].find(c => c.id === editId);
+  const nova = { cliente, descricao, emissao: emissao || '', vencimento, valor, categoria, forma, status: existente?.status || 'Em Aberto', atualizadoEm: serverTimestamp() };
   try {
-    const snap = await addDoc(colRef('contas a receber'), nova);
-    DB['contas a receber'].unshift({ id: snap.id, ...nova });
+    if (editId) {
+      await updateDoc(docRef('contas a receber', editId), nova);
+      const index = DB['contas a receber'].findIndex(c => c.id === editId);
+      if (index >= 0) DB['contas a receber'][index] = { ...DB['contas a receber'][index], ...nova };
+    } else {
+      const snap = await addDoc(colRef('contas a receber'), nova);
+      DB['contas a receber'].unshift({ id: snap.id, ...nova });
+    }
   } catch {
-    DB['contas a receber'].unshift({ id: 'demo_' + Date.now(), ...nova });
+    if (!editId) DB['contas a receber'].unshift({ id: 'demo_' + Date.now(), ...nova });
   }
 
   renderContasReceber();
   closeModal('modal-conta-receber');
-  toast('Conta a receber registrada.', 'success');
-  ['cr-cliente', 'cr-descricao', 'cr-vencimento', 'cr-valor'].forEach(id => {
+  toast(editId ? 'Conta a receber atualizada.' : 'Conta a receber registrada.', 'success');
+  ['cr-id', 'cr-cliente', 'cr-descricao', 'cr-vencimento', 'cr-valor'].forEach(id => {
     const el = qs(`#${id}`); if (el) el.value = '';
   });
 }
@@ -1140,11 +1288,15 @@ function renderBalancete() {
   if (!tbody) return;
   const analiticas = DB.planoContas.filter(c => c.tipo === 'A' && c.saldo !== null);
   tbody.innerHTML = analiticas.map(c => {
-    const isD  = c.nat === 'D';
-    const sAntD = isD ? +(c.saldo * 0.82).toFixed(2) : 0;
-    const sAntC = !isD ? +(c.saldo * 0.82).toFixed(2) : 0;
-    const mD    = isD ? +(c.saldo * 0.18).toFixed(2) : 0;
-    const mC    = !isD ? +(c.saldo * 0.18).toFixed(2) : 0;
+    const isD = c.nat === 'D';
+    const code = c.cod;
+    const movements = DB.lancamentos.filter(l => l.debito?.startsWith(code + ' ') || l.credito?.startsWith(code + ' '));
+    const mD = movements.filter(l => l.debito?.startsWith(code + ' ')).reduce((sum, l) => sum + Number(l.valor || 0), 0);
+    const mC = movements.filter(l => l.credito?.startsWith(code + ' ')).reduce((sum, l) => sum + Number(l.valor || 0), 0);
+    const saldoAtual = Number(c.saldo || 0);
+    const saldoAnterior = Math.max(0, saldoAtual - (isD ? mD - mC : mC - mD));
+    const sAntD = isD ? saldoAnterior : 0;
+    const sAntC = !isD ? saldoAnterior : 0;
     return `<tr>
       <td class="mono" style="font-size:11.5px;color:var(--text-tertiary)">${esc(c.cod)}</td>
       <td>${esc(c.nome)}</td>
@@ -1152,8 +1304,8 @@ function renderBalancete() {
       <td class="mono text-right">${sAntC > 0 ? fmt(sAntC) : ''}</td>
       <td class="mono text-right" style="color:var(--text-secondary)">${mD > 0 ? fmt(mD) : ''}</td>
       <td class="mono text-right" style="color:var(--text-secondary)">${mC > 0 ? fmt(mC) : ''}</td>
-      <td class="mono text-right" style="color:var(--info)">${isD ? fmt(c.saldo) : ''}</td>
-      <td class="mono text-right" style="color:var(--success)">${!isD ? fmt(c.saldo) : ''}</td>
+      <td class="mono text-right" style="color:var(--info)">${isD ? fmt(saldoAtual) : ''}</td>
+      <td class="mono text-right" style="color:var(--success)">${!isD ? fmt(saldoAtual) : ''}</td>
     </tr>`;
   }).join('');
 }
@@ -1188,27 +1340,28 @@ function renderDRE() {
   const wrap = qs('#dre-wrap');
   if (!wrap) return;
 
+  const valorPorConta = (prefixo, lado) => DB.planoContas
+    .filter(c => c.tipo === 'A' && c.cod.startsWith(prefixo))
+    .map(c => ({ conta: c, valor: DB.lancamentos.filter(l => l[lado]?.startsWith(c.cod + ' ')).reduce((s, l) => s + Number(l.valor || 0), 0) || Number(c.saldo || 0) }))
+    .filter(x => x.valor > 0);
+  const receitas = valorPorConta('4', 'credito');
+  const custos = valorPorConta('5', 'debito');
+  const despesas = valorPorConta('6', 'debito');
+  const totalReceitas = receitas.reduce((s, x) => s + x.valor, 0);
+  const totalCustos = custos.reduce((s, x) => s + x.valor, 0);
+  const totalDespesas = despesas.reduce((s, x) => s + x.valor, 0);
+  const lucroBruto = totalReceitas - totalCustos;
+  const lucroLiquido = lucroBruto - totalDespesas;
   const rows = [
-    { label: 'RECEITA OPERACIONAL BRUTA',             valor: 150720, tipo: 'header' },
-    { label: 'Receita bruta de vendas',               valor: 128200, tipo: 'child' },
-    { label: 'Receita de serviços',                   valor: 21400,  tipo: 'child' },
-    { label: 'Outras receitas',                       valor: 1120,   tipo: 'child' },
-    { label: '(-) DEDUÇÕES DA RECEITA BRUTA',         valor: -12580, tipo: 'header' },
-    { label: 'Impostos sobre vendas (PIS/COFINS/ISS)',valor: -10840, tipo: 'child' },
-    { label: 'Devoluções e abatimentos',              valor: -1740,  tipo: 'child' },
-    { label: 'RECEITA OPERACIONAL LÍQUIDA',           valor: 138140, tipo: 'result' },
-    { label: '(-) CUSTO DOS PRODUTOS E SERVIÇOS',     valor: -70300, tipo: 'header' },
-    { label: 'Custo das mercadorias vendidas',        valor: -62100, tipo: 'child' },
-    { label: 'Custo dos serviços prestados',          valor: -8200,  tipo: 'child' },
-    { label: 'LUCRO BRUTO',                           valor: 67840,  tipo: 'result' },
-    { label: '(-) DESPESAS OPERACIONAIS',             valor: -38140, tipo: 'header' },
-    { label: 'Despesas com pessoal',                  valor: -21580, tipo: 'child' },
-    { label: 'Despesas administrativas',              valor: -6870,  tipo: 'child' },
-    { label: 'Despesas tributárias',                  valor: -8450,  tipo: 'child' },
-    { label: 'Despesas financeiras',                  valor: -1240,  tipo: 'child' },
-    { label: 'RESULTADO ANTES DO IR/CSLL',            valor: 29700,  tipo: 'result' },
-    { label: '(-) Provisão IR/CSLL (25%)',            valor: -7425,  tipo: 'child' },
-    { label: 'LUCRO LÍQUIDO DO PERÍODO',              valor: 22275,  tipo: 'result grand' },
+    { label: 'RECEITA OPERACIONAL BRUTA', valor: totalReceitas, tipo: 'header' },
+    ...receitas.map(x => ({ label: x.conta.nome, valor: x.valor, tipo: 'child' })),
+    { label: 'RECEITA OPERACIONAL LÍQUIDA', valor: totalReceitas, tipo: 'result' },
+    { label: '(-) CUSTOS', valor: -totalCustos, tipo: 'header' },
+    ...custos.map(x => ({ label: x.conta.nome, valor: -x.valor, tipo: 'child' })),
+    { label: 'LUCRO BRUTO', valor: lucroBruto, tipo: 'result' },
+    { label: '(-) DESPESAS OPERACIONAIS', valor: -totalDespesas, tipo: 'header' },
+    ...despesas.map(x => ({ label: x.conta.nome, valor: -x.valor, tipo: 'child' })),
+    { label: 'LUCRO LÍQUIDO DO PERÍODO', valor: lucroLiquido, tipo: 'result grand' },
   ];
 
   wrap.innerHTML = rows.map(r => {
@@ -1223,7 +1376,7 @@ function renderDRE() {
     }
     const display = r.valor === 0 ? '—' : fmt(Math.abs(r.valor));
     return `<div class="dre-row ${r.tipo}">
-      <span class="dre-label">${r.label}</span>
+      <span class="dre-label">${esc(r.label)}</span>
       <span class="dre-value ${valClass}">${r.valor < 0 ? '(' : ''}${display}${r.valor < 0 ? ')' : ''}</span>
     </div>`;
   }).join('');
@@ -1238,34 +1391,18 @@ function renderBalanco() {
   const passivoWrap = qs('#balanco-passivo');
   if (!ativoWrap || !passivoWrap) return;
 
+  const porGrupo = (prefixo) => DB.planoContas.filter(c => c.tipo === 'A' && c.cod.startsWith(prefixo));
+  const ativoContas = porGrupo('1');
+  const passivoContas = [...porGrupo('2'), ...porGrupo('3')];
   const ativo = [
-    { label: 'ATIVO CIRCULANTE',            valor: 284200, tipo: 'group' },
-    { label: 'Caixa',                       valor: 18400 },
-    { label: 'Banco Bradesco — CC',         valor: 64380 },
-    { label: 'Clientes a receber',          valor: 31200 },
-    { label: 'Estoques de mercadorias',     valor: 142600 },
-    { label: 'Impostos a recuperar',        valor: 8420 },
-    { label: 'Despesas antecipadas',        valor: 4800 },
-    { label: 'Ajuste — outros circulantes', valor: 14400 },
-    { label: 'ATIVO NÃO CIRCULANTE',        valor: 200000, tipo: 'group' },
-    { label: 'Imobilizado bruto',           valor: 210000 },
-    { label: '(-) Depreciação acumulada',   valor: -30000 },
-    { label: 'Intangível',                  valor: 20000 },
-    { label: 'TOTAL DO ATIVO',              valor: 484200, tipo: 'total' },
+    { label: 'ATIVO', valor: ativoContas.reduce((s, c) => s + Number(c.saldo || 0), 0), tipo: 'group' },
+    ...ativoContas.map(c => ({ label: c.nome, valor: Number(c.saldo || 0) })),
+    { label: 'TOTAL DO ATIVO', valor: ativoContas.reduce((s, c) => s + Number(c.saldo || 0), 0), tipo: 'total' },
   ];
-
   const passivo = [
-    { label: 'PASSIVO CIRCULANTE',              valor: 82300,  tipo: 'group' },
-    { label: 'Fornecedores',                    valor: 47320 },
-    { label: 'Obrigações sociais a recolher',   valor: 21480 },
-    { label: 'Tributos a recolher',             valor: 13500 },
-    { label: 'PASSIVO NÃO CIRCULANTE',          valor: 120000, tipo: 'group' },
-    { label: 'Empréstimos e financiamentos',    valor: 120000 },
-    { label: 'PATRIMÔNIO LÍQUIDO',              valor: 281900, tipo: 'group' },
-    { label: 'Capital social integralizado',    valor: 200000 },
-    { label: 'Reserva legal',                   valor: 30000 },
-    { label: 'Lucros acumulados',               valor: 51900 },
-    { label: 'TOTAL PASSIVO + PL',              valor: 484200, tipo: 'total' },
+    { label: 'PASSIVO + PATRIMÔNIO LÍQUIDO', valor: passivoContas.reduce((s, c) => s + Number(c.saldo || 0), 0), tipo: 'group' },
+    ...passivoContas.map(c => ({ label: c.nome, valor: Number(c.saldo || 0) })),
+    { label: 'TOTAL PASSIVO + PL', valor: passivoContas.reduce((s, c) => s + Number(c.saldo || 0), 0), tipo: 'total' },
   ];
 
   const renderGroup = (list) => list.map(r => `
@@ -1274,7 +1411,7 @@ function renderBalanco() {
       border-bottom:1px solid var(--border-subtle);
       ${r.tipo === 'total' ? 'border-top:1px solid var(--border-base);margin-top:6px;padding-top:12px;font-weight:700' : ''}
       ${r.tipo === 'group' ? 'font-weight:600;color:var(--text-secondary);border-top:1px solid var(--border-base);margin-top:8px' : ''}">
-      <span style="font-size:${r.tipo === 'total' ? '14px' : '13px'};${!r.tipo ? 'padding-left:14px;color:var(--text-secondary)' : ''}">${r.label}</span>
+      <span style="font-size:${r.tipo === 'total' ? '14px' : '13px'};${!r.tipo ? 'padding-left:14px;color:var(--text-secondary)' : ''}">${esc(r.label)}</span>
       <span style="font-family:var(--font-mono);font-size:${r.tipo === 'total' ? '15px' : '13px'};
         color:${r.tipo === 'total' ? 'var(--accent)' : r.valor < 0 ? 'var(--danger)' : 'var(--text-secondary)'};
         font-weight:${r.tipo === 'total' ? '600' : '400'}">${r.valor < 0 ? '(' + fmt(Math.abs(r.valor)) + ')' : fmt(r.valor)}</span>
@@ -1379,6 +1516,7 @@ function renderEmpresas() {
         </div>
         <div style="display:flex;gap:6px;margin-top:16px">
           <button class="btn btn-secondary btn-sm" style="flex:1" data-id="${safeId}" data-action="selecionar-empresa" data-razao="${esc(e.razao)}">Selecionar</button>
+          <button class="btn btn-secondary btn-sm" data-id="${safeId}" data-action="edit-empresa">Editar</button>
           <button class="btn btn-danger btn-sm btn-icon" data-id="${safeId}" data-action="delete-empresa" title="Remover">${Icon.trash}</button>
         </div>
       </div>
@@ -1392,15 +1530,33 @@ function renderEmpresas() {
     const id    = btn.dataset.id;
     const razao = btn.dataset.razao || '';
     if (btn.dataset.action === 'selecionar-empresa') toast(`Abrindo ${razao}...`, 'info');
+    if (btn.dataset.action === 'edit-empresa' && id) editEmpresa(id);
     if (btn.dataset.action === 'delete-empresa' && id) deleteEmpresa(id);
   };
 }
 
 async function deleteEmpresa(id) {
-  DB.empresas = DB.empresas.filter(e => e.id !== id);
-  try { await deleteDoc(docRef('empresas', id)); } catch {}
-  renderEmpresas();
-  toast('Empresa removida.', 'info');
+  const empresa = DB.empresas.find(e => e.id === id);
+  if (!empresa) return;
+  confirmDelete(empresa.razao || 'empresa', async () => {
+    DB.empresas = DB.empresas.filter(e => e.id !== id);
+    try { await deleteDoc(docRef('empresas', id)); } catch {}
+    renderEmpresas(); toast('Empresa removida.', 'info');
+  });
+}
+
+function editEmpresa(id) {
+  const empresa = DB.empresas.find(e => e.id === id);
+  if (!empresa) return;
+  qs('#emp-id').value = id;
+  qs('#emp-razao').value = empresa.razao || '';
+  qs('#emp-cnpj').value = empresa.cnpj || '';
+  qs('#emp-ie').value = empresa.ie || '';
+  qs('#emp-regime').value = empresa.regime || 'Simples Nacional';
+  qs('#emp-cnae').value = empresa.cnae || '';
+  qs('#emp-email').value = empresa.email || '';
+  qs('#modal-empresa .modal-title').textContent = 'Editar Empresa';
+  openModal('modal-empresa');
 }
 
 async function saveEmpresa() {
@@ -1426,18 +1582,26 @@ async function saveEmpresa() {
   const regimesValidos = ['Simples Nacional', 'Lucro Presumido', 'Lucro Real', 'MEI'];
   const regimeSafe = regimesValidos.includes(regime) ? regime : 'Simples Nacional';
 
-  const nova = { razao, cnpj, ie: ie || '', regime: regimeSafe, cnae, atividade: '', email, cor: 'blue', criadoEm: serverTimestamp() };
+  const editId = sanitizeId(qs('#emp-id')?.value);
+  const existente = editId && DB.empresas.find(e => e.id === editId);
+  const nova = { razao, cnpj, ie: ie || '', regime: regimeSafe, cnae, atividade: existente?.atividade || '', email, cor: existente?.cor || 'blue', atualizadoEm: serverTimestamp() };
   try {
-    const snap = await addDoc(colRef('empresas'), nova);
-    DB.empresas.push({ id: snap.id, ...nova });
+    if (editId) {
+      await updateDoc(docRef('empresas', editId), nova);
+      const index = DB.empresas.findIndex(e => e.id === editId);
+      if (index >= 0) DB.empresas[index] = { ...DB.empresas[index], ...nova };
+    } else {
+      const snap = await addDoc(colRef('empresas'), nova);
+      DB.empresas.push({ id: snap.id, ...nova });
+    }
   } catch {
-    DB.empresas.push({ id: 'demo_' + Date.now(), ...nova });
+    if (!editId) DB.empresas.push({ id: 'demo_' + Date.now(), ...nova });
   }
 
   renderEmpresas();
   closeModal('modal-empresa');
-  toast('Empresa cadastrada com sucesso.', 'success');
-  ['emp-razao', 'emp-cnpj', 'emp-ie', 'emp-cnae', 'emp-email'].forEach(id => {
+  toast(editId ? 'Empresa atualizada com sucesso.' : 'Empresa cadastrada com sucesso.', 'success');
+  ['emp-id', 'emp-razao', 'emp-cnpj', 'emp-ie', 'emp-cnae', 'emp-email'].forEach(id => {
     const el = qs(`#${id}`); if (el) el.value = '';
   });
 }

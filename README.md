@@ -81,14 +81,14 @@ const firebaseConfig = {
 
 ## Regras de segurança recomendadas (Firestore)
 
-Configure no Firebase Console em **Firestore → Regras**:
+Configure no Firebase Console em **Firestore → Regras** usando o arquivo `firestore.rules`:
 
 ```js
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
     }
   }
 }

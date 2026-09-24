@@ -148,7 +148,11 @@ input, select, textarea { font-family: var(--font-sans); }
 #login-screen {
   position: fixed;
   inset: 0;
-  background: var(--bg-root);
+  background:
+    linear-gradient(rgba(67, 97, 238, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(67, 97, 238, 0.035) 1px, transparent 1px),
+    var(--bg-root);
+  background-size: 42px 42px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,13 +162,23 @@ input, select, textarea { font-family: var(--font-sans); }
 #login-screen.hidden { display: none; }
 
 .login-card {
+  position: relative;
+  overflow: hidden;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  border-radius: 20px;
-  padding: 40px;
+  border-radius: var(--r-xl);
+  padding: 44px;
   width: 100%;
-  max-width: 420px;
+  max-width: 430px;
   box-shadow: var(--shadow-lg);
+}
+
+.login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--info));
 }
 
 .login-header {
@@ -172,7 +186,7 @@ input, select, textarea { font-family: var(--font-sans); }
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  margin-bottom: 32px;
+  margin-bottom: 30px;
   text-align: center;
 }
 
@@ -194,7 +208,7 @@ input, select, textarea { font-family: var(--font-sans); }
 }
 
 .login-title {
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -202,6 +216,7 @@ input, select, textarea { font-family: var(--font-sans); }
 .login-sub {
   font-size: 13px;
   color: var(--text-tertiary);
+  max-width: 250px;
 }
 
 .login-form { display: flex; flex-direction: column; gap: 16px; }
@@ -220,7 +235,8 @@ input, select, textarea { font-family: var(--font-sans); }
 
 .btn-login {
   width: 100%;
-  padding: 11px;
+  min-height: 48px;
+  padding: 12px 16px;
   font-size: 14px;
   font-weight: 600;
   background: var(--accent);
@@ -234,6 +250,13 @@ input, select, textarea { font-family: var(--font-sans); }
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+.google-icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  display: block;
 }
 
 .btn-login:hover { background: var(--accent-hover); box-shadow: 0 0 0 3px var(--accent-glow); }
@@ -253,10 +276,17 @@ input, select, textarea { font-family: var(--font-sans); }
 .btn-login.loading .btn-text { display: none; }
 
 .login-footer {
-  margin-top: 20px;
+  margin-top: 24px;
   text-align: center;
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    margin: 16px;
+    padding: 36px 24px;
+  }
 }
 
 /* ============================================================
