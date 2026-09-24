@@ -1,6 +1,12 @@
+Aqui o README atualizado com o link:
+
+---
+
 # AMSI — Sistema de Contabilidade
 
 Sistema web de contabilidade empresarial com autenticação, lançamentos contábeis, controle financeiro e relatórios gerenciais.
+
+🔗 **[Acessar o sistema](https://amsi-contabilidade.netlify.app/)**
 
 ---
 
